@@ -10,6 +10,7 @@ RUN ./install_anaconda3.sh
 ENV CUDA_HOME=/usr/local/cuda
 ENV PATH="/root/anaconda3/bin:$PATH"
 ENV PATH="/usr/local/bin:/opt/local/sbin:$PATH"
+COPY ./courses/anaconda3/ /root/anaconda3/
 COPY ./environment.yml /root/setup/
 RUN ./install_fastai.sh
 RUN rm -fr /root/setup/
