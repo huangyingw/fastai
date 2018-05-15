@@ -3,9 +3,10 @@ channels:
     - fastai
     - pytorch
     - defaults
+    - peterjc123
 dependencies:
     - scipy
-    - cuda90
+    - cudnn
     - numpy
     - pillow
     - jpeg
@@ -36,6 +37,7 @@ dependencies:
     - jupyter_client
     - jupyter_console
     - jupyter_core
+    - conda-forge::jupyter_contrib_nbextensions
       #- libffi
       #- libgcc
       #- libgfortran
@@ -86,7 +88,7 @@ dependencies:
       #- terminado
     - testpath
     - tk
-    - tornado
+    - tornado<5
     - tqdm
     - traitlets
     - wcwidth
@@ -94,10 +96,12 @@ dependencies:
     - widgetsnbextension
     - xz
     - zeromq
-    - pytorch>=0.2.0
+    - pytorch<0.4
     - bcolz
     - prompt_toolkit
+    - pytest
     - pip:
+        - torchvision>=0.1.9
         - opencv-python
         - isoweek
         - pandas_summary
