@@ -36,9 +36,9 @@ dependencies:
     - jupyter_client
     - jupyter_console
     - jupyter_core
-    - libffi
-    - libgcc
-    - libgfortran
+      #- libffi
+      #- libgcc
+      #- libgfortran
     - libiconv
     - libpng
     - libsodium
@@ -95,7 +95,6 @@ dependencies:
     - xz
     - zeromq
     - pytorch>=0.2.0
-    - torchvision>=0.1.9
     - bcolz
     - prompt_toolkit
     - pip:
