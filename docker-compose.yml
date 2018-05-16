@@ -11,7 +11,8 @@ services:
       - ./.jupyter/jupyter_notebook_config.py:/root/.jupyter/jupyter_notebook_config.py
       - ./.jupyter/jupyter_notebook_config.json:/root/.jupyter/jupyter_notebook_config.json
       - ./.jupyter/custom/custom.js:/root/.jupyter/custom/custom.js
-      - .:/root/fastai
+      - ~/myproject/git/AI:/root/AI
+      - ~/myproject/git/AI/data/models/:/root/.torch/models/
       - ./entrypoint.sh:/entrypoint.sh
     ports:  
       - "8888:8888"
