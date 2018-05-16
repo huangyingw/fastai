@@ -12,6 +12,7 @@
 */.ipynb_checkpoints
 */data
 .git
+courses/anaconda3
 fastai/weights
 setup
 srts
