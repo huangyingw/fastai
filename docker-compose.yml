@@ -13,7 +13,6 @@ services:
       - ./.jupyter/custom/custom.js:/root/.jupyter/custom/custom.js
       - ~/myproject/git/AI:/root/AI
       - ~/myproject/git/AI/data/models/:/root/.torch/models/
-      - ./entrypoint.sh:/entrypoint.sh
     ports:  
       - "8888:8888"
-    command: /bin/sh -c "/entrypoint.sh"
+    command: /bin/sh -c "/root/AI/fastai/fastai/entrypoint.sh"
