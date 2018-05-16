@@ -5,7 +5,14 @@ COPY ./install_fastai.sh /root/setup/
 
 WORKDIR /root/setup/
 RUN apt-get update \
-        && apt-get install -y python3-pip git realpath curl \
+        && apt-get install -y \
+        curl \
+        git \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
+        python3-pip \
+        realpath \
         && apt-get clean
 RUN ./install_anaconda3.sh
 ENV CUDA_HOME=/usr/local/cuda
