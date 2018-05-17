@@ -8,6 +8,10 @@ RUN apt-get update \
         && apt-get install -y \
         curl \
         git \
+        libgl1-mesa-glx \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
         python3-pip \
         realpath \
         && apt-get clean
@@ -16,5 +20,6 @@ ENV CUDA_HOME=/usr/local/cuda
 ENV PATH="/root/anaconda3/bin:$PATH"
 ENV PATH="/usr/local/bin:/opt/local/sbin:$PATH"
 COPY ./environment.yml /root/setup/
+COPY ./setup.py /root/setup/
 RUN ./install_fastai.sh
 RUN rm -fr /root/setup/
