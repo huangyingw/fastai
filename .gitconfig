@@ -61,6 +61,9 @@
 [branch "dev"]
     remote = github
     merge = refs/heads/dev
+[branch "issues/progressbar"]
+    remote = github
+    merge = refs/heads/issues/progressbar
 [gdif]
     ignore = .gitmodules
     ignore = convert.sh
