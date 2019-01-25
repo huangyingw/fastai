@@ -3,7 +3,7 @@ from ..basic_train import *
 from ..basic_data import *
 from ..vision.data import *
 from ..vision.transform import *
-from ..vision.image import open_image
+from ..vision.image import *
 from ..callbacks.hooks import *
 from ..layers import *
 from ipywidgets import widgets, Layout
@@ -28,9 +28,10 @@ class DatasetFormatter():
         idxs = torch.topk(top_losses, n_imgs)[1]
         return cls.padded_ds(dl.dataset, **kwargs), idxs
 
-    def padded_ds(ll_input, size=(250, 300), do_crop=False, padding_mode='zeros', **kwargs):
-        "For a LabelList `ll_input`, resize each image to `size`. Optionally `do_crop` or pad with `padding_mode`."
-        return ll_input.transform(tfms=crop_pad(), size=size, do_crop=do_crop, padding_mode=padding_mode)
+    def padded_ds(ll_input, size=(250, 300), resize_method=ResizeMethod.CROP, padding_mode='zeros', **kwargs):
+        "For a LabelList `ll_input`, resize each image to `size` using `resize_method` and `padding_mode`."
+        return ll_input.transform(tfms=crop_pad(), size=size, resize_method=resize_method, padding_mode=padding_mode)
+    
     @classmethod
     def from_similars(cls, learn, layer_ls:list=[0, 7, 2], **kwargs):
         "Gets the indices for the most similar images."
@@ -75,7 +76,8 @@ class DatasetFormatter():
         w1 = t1.norm(p=2, dim=1, keepdim=True)
         w2 = w1 if t2 is t1 else t2.norm(p=2, dim=1, keepdim=True)
 
-        return torch.mm(t1, t2.t()) / (w1 * w2.t()).clamp(min=1e-8)
+        t = torch.mm(t1, t2.t()) / (w1 * w2.t()).clamp(min=1e-8)
+        return torch.tril(t, diagonal=-1) 
 
     def largest_indices(arr, n):
         "Returns the `n` largest indices from a numpy array `arr`."

@@ -13,20 +13,107 @@ of that change.
 
 
 
-## 1.0.39.dev0 (Work In Progress)
+## 1.0.43.dev0 (Work In Progress)
 
 ### New:
 
-- `Learner.to_fp32()` to go back to FP32 precision mode.
+### Changed:
+
+### Fixed:
+
+
+
+## 1.0.42 (2019-01-24)
+
+### New:
+
+- `gpu_mem_restore` decorator - Reclaim GPU RAM if CUDA out of memory happened, or execution was interrupted
+- `gpu_mem_restore_ctx` context manager - same functionality as `gpu_mem_restore`
+- `PeakMemMetric` callback to profile general and GPU RAM used and peaked by epoch
+- `ClassificationInterpration.plot_multi_top_losses` (thanks to terriblissimo)
+- `Learner.export` serializes the model on the CPU to avoid loading on the GPU when there are none (thanks to pouannes)
+
+### Changed:
+
+### Fixed:
+
+- any fastai function that internally uses `fit()` will no longer suffer from
+  unrecoverable 'CUDA out of memory error' unless overridden by the `FASTAI_TB_CLEAR_FRAMES` environment variable, which also allows extending this protection to all other exceptions.
+- `DataBunch.show_batch` and `Learner.show_results` show at maximum batch_size elements
+- `DataBunch.show_batch` and `Learner.show_results` handle `rows=1` (thanks to xnutsive)
+- `LanguageModelPreLoader` is way faster (thanks to kasparlund)
+
+
+## 1.0.41 (2019-01-22)
+
+### Breaking change:
+
+- `sep` (in ImageDataBunch factory methods) is now called `label_delim`
+
+### New:
+
+### Changed:
+
+- Clearer representation of `FlattenedLoss`
+
+### Fixed:
+
+- Bug when loading text data in multi-classification with `TextDataBunch.load`
+- Wrong values for metrics like MSE due to broadcasting errors
+- `ImageDataBunch` doesn't shuffle the valdiation labels anymore
+
+
+## 1.0.40 (2019-01-17)
+
+### New:
+
+- `ImageDownloader()` widget for quick image datasets research
+- `Learner.export` to export the state of a `Learner` for inference (with `Callback.get_state` to get the state of a callback behind the scenes)
+- `load_learner` to load a `Learner` from an exported state (with `load_callback` to load the state of a callback behind the scenes)
+- A dataset can also be a `Callback` if we want to apply changes at the beginning of every epoch
+
+### Changed:
+
+- If no label is provided, the test set has `EmptyLabel` for every item
+- `LanguageModelLoader` becomes `LanguageModelPreLoader` and is a dataset to wrap in a pytorch `DataLoader`
+
+### Fixed:
+
+- Avoid bugs in tabular by copying the dataframe in `TabularList.from_df`
+- Can properly change the batch size even if the `DataLoader` is an `LanguageDataLoader`
+- Bug in `ImageBBox` when all the targets had the same number of bboxes
+- Default metric in `RNNLearner` is accuracy only for language models or classification tasks
+- Throws a clear error message when trying to use `databunch` on not-split data
+- Fix `flatten_model` that removed parameters not registered in modules
+- Fix behavior of `apply_tfms` with `mult` and output size.
+- Fix bug in `DataBunch.one_item` when doing object detection
+
+## 1.0.39 (2018-12-28)
+
+### Breaking changes:
+
+- `Fbeta_binary` is now `FBeta`
+
+### New:
+
+- `Learner.to_fp32()` to go back to FP32 precision mode
+- `cont_cat_split` function to automatically get categorical/continuous variables (thanks to RealLankinen)
+- Lots of new metrics thanks to Sven Becker: `mse/mean_squared_error`, `mae/mean_absolute_error`, `rmse/root_mean_squared_error`, `msle/ mean_squared_logarithmic_error`, `explained_variance`, `r2_score`, `top_k_accuracy`, `KappaScore`, `MatthewsCorreff`, `Precision`, `Recall`, `FBeta`
+- `BatchNorm1dFlat` for using batchnorm in sequence models (e.g. RNNs, and their inputs and outputs)
 
 ### Changed:
 
 - The data block API has additional checks with assertions (NaNs in columns used for inputs/labels in dataframes, empty items)
 - kwargs are checked in the data block API
+- `model_summary` now returns summary instead of printing it
 
 ### Fixed:
 
 - Predictions now work in FP16 mode
+- Model is unwrapped at the end of a distributed training (thanks to mgrankin)
+- `DataBunch.export` works for multi-classification problems where `one_hot=True`
+- Fix bug in `DatasetFormatter`
+- Fix `LanguageLearner.predict`
 
 
 ## 1.0.38 (2018-12-18)
@@ -47,7 +134,7 @@ of that change.
 - `fastai.launch` module for simplified single-machine multi-GPU training
 - `check_perf` - performance improvement recommendations
 - `distributed` module with helper functions to quickly launch a distributed training
-- temptative use of JIT C++ extensions to code the QRNN with `batch_first` argument, it needs a proper installation 
+- temptative use of JIT C++ extensions to code the QRNN with `batch_first` argument, it needs a proper installation
   of cuda to be compiled at execution time
 
 ### Changed:

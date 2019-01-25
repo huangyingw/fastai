@@ -94,6 +94,11 @@ def to_cpu(b:ItemsList):
     if is_listy(b): return [to_cpu(o) for o in b]
     return b.cpu() if isinstance(b,Tensor) else b
 
+def to_half(b:Collection[Tensor])->Collection[Tensor]:
+    "Recursively map lists of tensors in `b ` to FP16."
+    if is_listy(b): return [to_half(o) for o in b]
+    return b.half() if b.dtype not in [torch.int64, torch.int32, torch.int16] else b
+
 def to_device(b:Tensors, device:torch.device):
     "Recursively put `b` on `device`."
     device = ifnone(device, defaults.device)
@@ -105,7 +110,7 @@ def data_collate(batch:ItemsList)->Tensor:
     return torch.utils.data.dataloader.default_collate(to_data(batch))
 
 def requires_grad(m:nn.Module, b:Optional[bool]=None)->Optional[bool]:
-    "If `b` is not set `requires_grad` on all params in `m`, else return `requires_grad` of first param."
+    "If `b` is not set return `requires_grad` of first param, else set `requires_grad` on all params as `b`"
     ps = list(m.parameters())
     if not ps: return None
     if b is None: return ps[0].requires_grad
@@ -128,7 +133,24 @@ def range_children(m:nn.Module)->Iterator[int]:
     "Return iterator of len of children of `m`."
     return range(num_children(m))
 
-flatten_model = lambda m: sum(map(flatten_model,m.children()),[]) if num_children(m) else [m]
+class ParameterModule(nn.Module):
+    "Register a lone parameter `p` in a module."
+    def __init__(self, p:nn.Parameter):
+        super().__init__()
+        self.val = p
+    
+    def forward(self, x): return x
+    
+def children_and_parameters(m:nn.Module):
+    "Return the children of `m` and its direct parameters not registered in modules."
+    children = list(m.children())
+    children_p = sum([[id(p) for p in c.parameters()] for c in m.children()],[])
+    for p in m.parameters():
+        if id(p) not in children_p: children.append(ParameterModule(p))
+    return children
+
+flatten_model = lambda m: sum(map(flatten_model,children_and_parameters(m)),[]) if num_children(m) else [m]
+
 def first_layer(m:nn.Module)->nn.Module:
     "Retrieve first layer in a module `m`."
     return flatten_model(m)[0]
@@ -173,9 +195,9 @@ def set_bn_eval(m:nn.Module)->None:
             l.eval()
         set_bn_eval(l)
 
-def to_half(b:Collection[Tensor])->Collection[Tensor]:
-    "Set the input of batch `b` to half precision if isn't an int type."
-    return [b[0].half(), b[1]] if b[0].dtype != torch.int64 else b
+def batch_to_half(b:Collection[Tensor])->Collection[Tensor]:
+    "Set the input of batch `b` to half precision."
+    return [to_half(b[0]), b[1]]
 
 def bn2float(module:nn.Module)->nn.Module:
     "If `module` is batchnorm don't use half precision."
@@ -260,11 +282,6 @@ def tensor__array__(self, dtype=None):
 Tensor.__array__ = tensor__array__
 Tensor.ndim = property(lambda x: len(x.shape))
 
-class FloatItem(ItemBase):
-    "Basic class for float items."
-    def __init__(self,obj): self.data,self.obj = tensor(obj),obj
-    def __str__(self): return str(self.obj)
-
 def grab_idx(x,i,batch_first:bool=True):
     "Grab the `i`-th batch in `x`, `batch_first` stating the batch dimension."
     if batch_first: return ([o[i].cpu() for o in x]   if is_listy(x) else x[i].cpu())
@@ -313,6 +330,12 @@ def try_int(o:Any)->Any:
 def get_model(model:nn.Module):
     "Return the model maybe wrapped inside `model`."
     return model.module if isinstance(model, nn.DataParallel) else model
+
+def flatten_check(out:Tensor, targ:Tensor) -> Tensor:
+    "Check that `out` and `targ` have the same number of elements and flatten them."
+    out,targ = out.contiguous().view(-1),targ.contiguous().view(-1)
+    assert len(out) == len(targ), f"Expected output and target to have the same number of elements but got {len(out)} and {len(targ)}."
+    return out,targ
 
 #Monkey-patch nn.DataParallel.reset
 def _data_parallel_reset(self): 

@@ -57,6 +57,7 @@ class TabularProcessor(PreProcessor):
     def process(self, ds):
         if ds.xtra is None:
             ds.classes,ds.cat_names,ds.cont_names = self.classes,self.cat_names,self.cont_names
+            ds.preprocessed = True
             return
         for i,proc in enumerate(self.procs):
             if isinstance(proc, TabularProc): proc(ds.xtra, test=True)
@@ -78,6 +79,7 @@ class TabularProcessor(PreProcessor):
             cont_cols = list(ds.xtra[ds.cont_names].columns.values)
         else: ds.conts,cont_cols = None,[]
         ds.col_names = cat_cols + cont_cols
+        ds.preprocessed = True
 
 class TabularDataBunch(DataBunch):
     "Create a `DataBunch` suitable for tabular data."
@@ -91,8 +93,8 @@ class TabularDataBunch(DataBunch):
         cont_names = ifnone(cont_names, list(set(df)-set(cat_names)-{dep_var}))
         procs = listify(procs)
         src = (TabularList.from_df(df, path=path, cat_names=cat_names, cont_names=cont_names, procs=procs)
-                           .split_by_idx(valid_idx)
-                           .label_from_df(cols=dep_var, classes=classes))
+                           .split_by_idx(valid_idx))
+        src = src.label_from_df(cols=dep_var) if classes is None else src.label_from_df(cols=dep_var, classes=classes)
         if test_df is not None: src.add_test(TabularList.from_df(test_df, cat_names=cat_names, cont_names=cont_names,
                                                                  processor = src.train.x.processor))
         return src.databunch(**kwargs)
@@ -110,13 +112,15 @@ class TabularList(ItemList):
         if cont_names is None: cont_names = []
         self.cat_names,self.cont_names,self.procs = cat_names,cont_names,procs
         self.copy_new += ['cat_names', 'cont_names', 'procs']
+        self.preprocessed = False
 
     @classmethod
     def from_df(cls, df:DataFrame, cat_names:OptStrList=None, cont_names:OptStrList=None, procs=None, **kwargs)->'ItemList':
         "Get the list of inputs in the `col` of `path/csv_name`."
-        return cls(items=range(len(df)), cat_names=cat_names, cont_names=cont_names, procs=procs, xtra=df, **kwargs)
+        return cls(items=range(len(df)), cat_names=cat_names, cont_names=cont_names, procs=procs, xtra=df.copy(), **kwargs)
 
     def get(self, o):
+        if not self.preprocessed: return self.xtra.iloc[o] if hasattr(self, 'xtra') else self.items[o]
         codes = [] if self.codes is None else self.codes[o]
         conts = [] if self.conts is None else self.conts[o]
         return self._item_cls(codes, conts, self.classes, self.col_names)

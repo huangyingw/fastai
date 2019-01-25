@@ -17,8 +17,6 @@ def to_list(buffer): return list(filter(None, map(cleanup, buffer.splitlines()))
 
 ### normal dependencies ###
 #
-# IMPORTANT: when updating these, please make sure to sync conda/meta.yaml and docs/install.md (the "custom dependencies" section)
-#
 # these get resolved and installed via either of these two:
 #
 #   pip install fastai
@@ -27,12 +25,12 @@ def to_list(buffer): return list(filter(None, map(cleanup, buffer.splitlines()))
 # dependencies to skip for now:
 # - cupy - is only required for QRNNs - sgugger thinks later he will get rid of this dep.
 #
-# XXX: when spacy==2.0.18 is on anaconda channel, put it in place (it's already on pypi) and remove its deps: cymem, regex, thinc (and update meta.yaml with the same)
+# IMPORTANT: when updating these, please make sure to sync conda/meta.yaml and docs/install.md (the "custom dependencies" section)
 requirements = to_list("""
     bottleneck           # performance-improvement for numpy
-    cymem==2.0.2         # remove once spacy==2.0.18 is on anaconda channel
     dataclasses ; python_version<'3.7'
     fastprogress>=0.1.18
+    beautifulsoup4
     matplotlib
     numexpr              # performance-improvement for numpy
     numpy>=1.12
@@ -41,12 +39,10 @@ requirements = to_list("""
     packaging
     Pillow
     pyyaml
-    regex==2018.01.10    # remove once spacy==2.0.18 is on anaconda channel
     requests
     scipy
-    spacy==2.0.16
-    thinc==6.12.0        # remove once spacy==2.0.18 is on anaconda channel
-    torch
+    spacy>=2.0.18
+    torch>=1.0.0
     torchvision
     typing
 """)
@@ -61,11 +57,11 @@ requirements = to_list("""
 #
 # these, including the normal dependencies, get installed with:
 #
-#   pip install fastai[dev]
+#   pip install "fastai[dev]"
 #
 # or via an editable install:
 #
-#   pip install -e .[dev]
+#   pip install -e ".[dev]"
 #
 # some of the listed modules appear in test_requirements as well, as explained below.
 #
@@ -82,6 +78,7 @@ dev_requirements = { 'dev' : to_list("""
     pip>=9.0.1
     pipreqs>=0.4.9
     pytest
+    responses                    # for requests testing
     traitlets
     wheel>=0.30.0
 """) }

@@ -3,9 +3,9 @@ from .torch_core import *
 
 __all__ = ['AdaptiveConcatPool2d', 'BCEWithLogitsFlat', 'BCEFlat', 'MSELossFlat', 'CrossEntropyFlat', 'Debugger',
            'Flatten', 'Lambda', 'PoolFlatten', 'ResizeBatch', 'bn_drop_lin', 'conv2d', 'conv2d_trans', 'conv_layer',
-           'embedding', 'simple_cnn', 'NormType', 'relu', 'batchnorm_2d', 'trunc_normal_',
-           'PixelShuffle_ICNR', 'icnr', 'NoopLoss', 'WassersteinLoss', 'SelfAttention',
-           'SequentialEx', 'MergeLayer', 'res_block', 'sigmoid_range', 'SigmoidRange', 'PartialLayer', 'FlattenedLoss']
+           'embedding', 'simple_cnn', 'NormType', 'relu', 'batchnorm_2d', 'trunc_normal_', 'PixelShuffle_ICNR', 'icnr',
+           'NoopLoss', 'WassersteinLoss', 'SelfAttention', 'SequentialEx', 'MergeLayer', 'res_block', 'sigmoid_range',
+           'SigmoidRange', 'PartialLayer', 'FlattenedLoss', 'BatchNorm1dFlat']
 
 class Lambda(nn.Module):
     "An easy way to create a pytorch layer for a simple `func`."
@@ -20,10 +20,16 @@ def ResizeBatch(*size:int) -> Tensor:
     "Layer that resizes x to `size`, good for connecting mismatched layers."
     return Lambda(lambda x: x.view((-1,)+size))
 
-def Flatten(full:bool=False)->Tensor:
+class Flatten(nn.Module):
     "Flatten `x` to a single dimension, often used at the end of a model. `full` for rank-1 tensor"
-    func = (lambda x: x.view(-1)) if full else (lambda x: x.view(x.size(0), -1))
-    return Lambda(func)
+    def __init__(self, full:bool=False):
+        super().__init__()
+        self.full = full
+    
+    def forward(self, x):
+        return x.view(-1) if self.full else x.view(x.size(0), -1)
+    #func = (lambda x: x.view(-1)) if full else (lambda x: x.view(x.size(0), -1))
+    #return Lambda(func)
 
 def PoolFlatten()->nn.Sequential:
     "Apply `nn.AdaptiveAvgPool2d` to `x` and then flatten the result."
@@ -211,6 +217,7 @@ class FlattenedLoss():
     def __init__(self, func, *args, axis:int=-1, floatify:bool=False, is_2d:bool=True, **kwargs):
         self.func,self.axis,self.floatify,self.is_2d = func(*args,**kwargs),axis,floatify,is_2d
 
+    def __repr__(self): return f"FlattenedLoss of {self.func}"
     @property
     def reduction(self): return self.func.reduction
     @reduction.setter
@@ -269,3 +276,12 @@ def embedding(ni:int,nf:int) -> nn.Module:
     # See https://arxiv.org/abs/1711.09160
     with torch.no_grad(): trunc_normal_(emb.weight, std=0.01)
     return emb
+
+class BatchNorm1dFlat(nn.BatchNorm1d):
+    "`nn.BatchNorm1d`, but first flattens leading dimensions"
+    def forward(self, x):
+        if x.dim()==2: return super().forward(x)
+        *f,l = x.shape
+        x = x.contiguous().view(-1,l)
+        return super().forward(x).view(*f,l)
+
