@@ -80,6 +80,7 @@ dependencies:
 - six
 - sqlite
 - statsmodels
+- tabulate
 - testfixtures
 - testpath>=0.4.2
 - tk
