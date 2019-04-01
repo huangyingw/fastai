@@ -82,7 +82,7 @@ def create_cnn_model(base_arch:Callable, nc:int, cut:Union[int,Callable]=None, p
     "Create custom convnet architecture"
     body = create_body(base_arch, pretrained, cut)
     if custom_head is None:
-        nf = num_features_model(nn.Sequential(*body.children())) * 2
+        nf = num_features_model(nn.Sequential(*body.children())) * (2 if concat_pool else 1)
         head = create_head(nf, nc, lin_ftrs, ps=ps, concat_pool=concat_pool, bn_final=bn_final)
     else: head = custom_head
     return nn.Sequential(body, head)
@@ -129,7 +129,7 @@ def _cl_int_from_learner(cls, learn:Learner, ds_type:DatasetType=DatasetType.Val
 
 def _cl_int_plot_top_losses(self, k, largest=True, figsize=(12,12), heatmap:bool=True, heatmap_thresh:int=16,
                             return_fig:bool=None)->Optional[plt.Figure]:
-    "Show images in `top_losses` along with their prediction, actual, loss, and probability of predicted class."
+    "Show images in `top_losses` along with their prediction, actual, loss, and probability of actual class."
     tl_val,tl_idx = self.top_losses(k, largest)
     classes = self.data.classes
     cols = math.ceil(math.sqrt(k))
@@ -153,8 +153,8 @@ def _cl_int_plot_top_losses(self, k, largest=True, figsize=(12,12), heatmap:bool
                 grad = hook_g.stored[0][0].cpu()
                 grad_chan = grad.mean(1).mean(1)
                 mult = F.relu(((acts*grad_chan[...,None,None])).sum(0))
-                sz = im.shape[-1]
-                axes.flat[i].imshow(mult, alpha=0.6, extent=(0,sz,sz,0), interpolation='bilinear', cmap='magma')
+                sz = list(im.shape[-2:])
+                axes.flat[i].imshow(mult, alpha=0.6, extent=(0,*sz[::-1],0), interpolation='bilinear', cmap='magma')                
     if ifnone(return_fig, defaults.return_fig): return fig
 
 def _cl_int_plot_multi_top_losses(self, samples:int=3, figsize:Tuple[int,int]=(8,8), save_misclassified:bool=False):

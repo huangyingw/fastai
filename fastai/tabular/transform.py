@@ -102,13 +102,13 @@ def add_elapsed_times(df:DataFrame, field_names:Collection[str], date_field:str,
         work_df = work_df.merge(tmp, 'left', [date_field, base_field], suffixes=['', s])
     work_df.drop(field_names,1,inplace=True)
     return df.merge(work_df, 'left', [date_field, base_field])
-        
-def cont_cat_split(df, max_card=20, dep_var=None):
+
+def cont_cat_split(df, max_card=20, dep_var=None)->Tuple[List,List]:
     "Helper function that returns column names of cont and cat variables from given df."
     cont_names, cat_names = [], []
     for label in df:
         if label == dep_var: continue
-        if len(set(df[label])) > max_card and df[label].dtype == int or df[label].dtype == float: cont_names.append(label)
+        if df[label].dtype == int and df[label].unique().shape[0] > max_card or df[label].dtype == float: cont_names.append(label)
         else: cat_names.append(label)
     return cont_names, cat_names
         
@@ -181,7 +181,7 @@ class FillMissing(TabularProc):
 class Normalize(TabularProc):
     "Normalize the continuous variables."
     def apply_train(self, df:DataFrame):
-        "Comput the means and stds of `self.cont_names` columns to normalize them."
+        "Compute the means and stds of `self.cont_names` columns to normalize them."
         self.means,self.stds = {},{}
         for n in self.cont_names:
             assert is_numeric_dtype(df[n]), (f"""Cannot normalize '{n}' column as it isn't numerical.

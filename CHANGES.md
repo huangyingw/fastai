@@ -10,16 +10,45 @@ Note that the top-most release is changes in the unreleased master branch on
 Github. Parentheses after an item show the name or github id of the contributor
 of that change.
 
-## 1.0.49.dev0 (Work In Progress)
+## 1.0.51.dev0 (Work In Progress)
+
+### Breaking changed:
+- Loading and saving. Added option to save/load from streams (buffers or file pointers). 
+**Note** In all save/load related functions (`Learn.save`, `Learn.export`, `load_learner`, `DataBunch.save`, `load_data`), the parameter name `fname` was renamed to `file`.
+
+### New:
+
+### Changed:
+
+### Fixed:
+
+- Default to using training set for `batch_stats` instead of validation
+
+
+## 1.0.50 (2019-03-19)
+
+### New:
+
+### Changed:
+
+### Fixed:
+
+
+
+## 1.0.49 (2019-03-15)
 
 ### New:
 
 ### Changed:
 
 - `MixedPrecisionCallback`: `dynamic` now defaults to True
+- `fit` now takes a `BasicLearner`
 
 ### Fixed:
 
+- bug in `DataBunch.export` or `Learner.export` in object detection
+- `TextClassificationInterpretation` now works again (thanks to code from mikonapoli)
+- `create_cnn` hangs on Windows with PyTorch 1.0.1
 
 ## 1.0.48 (2019-03-09)
 

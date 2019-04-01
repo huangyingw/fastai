@@ -41,7 +41,7 @@ def get_preds(model:nn.Module, dl:DataLoader, pbar:Optional[PBar]=None, cb_handl
     "Tuple of predictions and targets, and optional losses (if `loss_func`) using `dl`, max batches `n_batch`."
     res = [torch.cat(o).cpu() for o in
            zip(*validate(model, dl, cb_handler=cb_handler, pbar=pbar, average=False, n_batch=n_batch))]
-    if loss_func is not None: 
+    if loss_func is not None:
         with NoneReduceOnCPU(loss_func) as lf: res.append(lf(res[0], res[1]))
     if activ is not None: res[0] = activ(res[0])
     return res
@@ -74,11 +74,17 @@ def train_epoch(model:nn.Module, dl:DataLoader, opt:optim.Optimizer, loss_func:L
         opt.step()
         opt.zero_grad()
 
-def fit(epochs:int, model:nn.Module, loss_func:LossFunction, opt:optim.Optimizer,
-        data:DataBunch, callbacks:Optional[CallbackList]=None, metrics:OptMetrics=None)->None:
+@dataclass
+class BasicLearner():
+    model:nn.Module
+    loss_func:LossFunction
+    opt:optim.Optimizer
+    data:DataBunch
+
+def fit(epochs:int, learn:BasicLearner, callbacks:Optional[CallbackList]=None, metrics:OptMetrics=None)->None:
     "Fit the `model` on `data` and learn using `loss_func` and `opt`."
-    assert len(data.train_dl) != 0, f"""Your training dataloader is empty, can't train a model.
-        Use a smaller batch size (batch size={data.train_dl.batch_size} for {len(data.train_dl.dataset)} elements)."""
+    assert len(learn.data.train_dl) != 0, f"""Your training dataloader is empty, can't train a model.
+        Use a smaller batch size (batch size={learn.data.train_dl.batch_size} for {len(learn.data.train_dl.dataset)} elements)."""
     cb_handler = CallbackHandler(callbacks, metrics)
     pbar = master_bar(range(epochs))
     cb_handler.on_train_begin(epochs, pbar=pbar, metrics=metrics)
@@ -86,16 +92,16 @@ def fit(epochs:int, model:nn.Module, loss_func:LossFunction, opt:optim.Optimizer
     exception=False
     try:
         for epoch in pbar:
-            model.train()
-            cb_handler.set_dl(data.train_dl)
+            learn.model.train()
+            cb_handler.set_dl(learn.data.train_dl)
             cb_handler.on_epoch_begin()
-            for xb,yb in progress_bar(data.train_dl, parent=pbar):
+            for xb,yb in progress_bar(learn.data.train_dl, parent=pbar):
                 xb, yb = cb_handler.on_batch_begin(xb, yb)
-                loss = loss_batch(model, xb, yb, loss_func, opt, cb_handler)
+                loss = loss_batch(learn.model, xb, yb, learn.loss_func, learn.opt, cb_handler)
                 if cb_handler.on_batch_end(loss): break
 
-            if not data.empty_val:
-                val_loss = validate(model, data.valid_dl, loss_func=loss_func,
+            if not learn.data.empty_val:
+                val_loss = validate(learn.model, learn.data.valid_dl, loss_func=learn.loss_func,
                                        cb_handler=cb_handler, pbar=pbar)
             else: val_loss=None
             if cb_handler.on_epoch_end(val_loss): break
@@ -163,7 +169,7 @@ class Learner():
         self.callback_fns = [partial(Recorder, add_time=self.add_time)] + listify(self.callback_fns)
 
     def init(self, init): apply_init(self.model, init)
-        
+
     def _test_writeable_path(self):
         path = self.path/self.model_dir
         try: tmp_file = get_tmp_file(path)
@@ -187,8 +193,7 @@ class Learner():
         else: self.opt.lr,self.opt.wd = lr,wd
         callbacks = [cb(self) for cb in self.callback_fns] + listify(callbacks)
         if defaults.extra_callbacks is not None: callbacks += defaults.extra_callbacks
-        fit(epochs, self.model, self.loss_func, opt=self.opt, data=self.data, metrics=self.metrics,
-            callbacks=self.callbacks+callbacks)
+        fit(epochs, self, metrics=self.metrics, callbacks=self.callbacks+callbacks)
 
     def create_opt(self, lr:Floats, wd:Floats=0.)->None:
         "Create optimizer with `lr` learning rate and `wd` weight decay."
@@ -219,8 +224,8 @@ class Learner():
         self.freeze_to(0)
         self.create_opt(defaults.lr)
 
-    def export(self, fname:PathOrStr='export.pkl', destroy=False):
-        "Export the state of the `Learner` in `self.path/fname`."
+    def export(self, file:PathLikeOrBinaryStream='export.pkl', destroy=False):
+        "Export the state of the `Learner` in `self.path/file`. `file` can be file-like (file or buffer)"
         if rank_distrib(): return # don't save if slave proc
         args = ['opt_func', 'loss_func', 'metrics', 'true_wd', 'bn_wd', 'wd', 'train_bn', 'model_dir', 'callback_fns']
         state = {a:getattr(self,a) for a in args}
@@ -232,31 +237,32 @@ class Learner():
             xtra = dict(normalize=self.data.norm.keywords) if getattr(self.data, 'norm', False) else {}
             state['data'] = self.data.valid_ds.get_state(**xtra)
             state['cls'] = self.__class__
-            try_save(state, self.path, fname)
+            try_save(state, self.path, file)
         if destroy: self.destroy()
 
-    def save(self, name:PathOrStr, return_path:bool=False, with_opt:bool=True):
-        "Save model and optimizer state (if `with_opt`) with `name` to `self.model_dir`."
-        self._test_writeable_path()
+    def save(self, file:PathLikeOrBinaryStream=None, return_path:bool=False, with_opt:bool=True):
+        "Save model and optimizer state (if `with_opt`) with `file` to `self.model_dir`. `file` can be file-like (file or buffer)"
+        if is_pathlike(file): self._test_writeable_path()
         if rank_distrib(): return # don't save if slave proc
-        path = self.path/self.model_dir/f'{name}.pth'
+        target = self.path/self.model_dir/f'{file}.pth' if is_pathlike(file) else file
         if not hasattr(self, 'opt'): with_opt=False
         if not with_opt: state = get_model(self.model).state_dict()
         else: state = {'model': get_model(self.model).state_dict(), 'opt':self.opt.state_dict()}
-        torch.save(state, path)
-        if return_path: return path
+        torch.save(state, target)
+        if return_path: return target
 
     def dl(self, ds_type:DatasetType=DatasetType.Valid):
         "Return DataLoader for DatasetType `ds_type`."
         return self.data.dl(ds_type)
 
-    def load(self, name:PathOrStr, device:torch.device=None, strict:bool=True, with_opt:bool=None, purge:bool=True,
-            remove_module:bool=False):
-        "Load model and optimizer state (if `with_opt`) `name` from `self.model_dir` using `device`."
+    def load(self, file:PathLikeOrBinaryStream=None, device:torch.device=None, strict:bool=True,
+             with_opt:bool=None, purge:bool=True, remove_module:bool=False):
+        "Load model and optimizer state (if `with_opt`) `file` from `self.model_dir` using `device`. `file` can be file-like (file or buffer)"
         if purge: self.purge(clear_opt=ifnone(with_opt, False))
         if device is None: device = self.data.device
         elif isinstance(device, int): device = torch.device('cuda', device)
-        state = torch.load(self.path/self.model_dir/f'{name}.pth', map_location=device)
+        source = self.path/self.model_dir/f'{file}.pth' if is_pathlike(file) else file
+        state = torch.load(source, map_location=device)
         if set(state.keys()) == {'model', 'opt'}:
             model_state = state['model']
             if remove_module: model_state = remove_module_load(model_state)
@@ -314,7 +320,8 @@ class Learner():
         cb_state = state.pop('cb_state')
         self.callbacks = [load_callback(c,s, self) for c,s in cb_state.items()]
         if not clear_opt and 'opt' in state:
-            self.opt = OptimWrapper.load_with_state_and_layer_group(state['opt'], self.layer_groups)
+            try: self.opt = OptimWrapper.load_with_state_and_layer_group(state['opt'], self.layer_groups)
+            except: warn("Wasn't able to properly load the optimizer state again.")
         del state
         gc.collect()
         return self
@@ -471,21 +478,21 @@ class Recorder(LearnerCallback):
         "Format stats before printing."
         str_stats = []
         for name,stat in zip(self.names,stats):
-            str_stats.append('' if stat is None else str(stat) if isinstance(stat, int) else f'{stat:.6f}')
+            str_stats.append('#na#' if stat is None else str(stat) if isinstance(stat, int) else f'{stat:.6f}')
         if self.add_time: str_stats.append(format_time(time() - self.start_epoch))
         if not self.silent: self.pbar.write(str_stats, table=True)
 
     def add_metric_names(self, names):
         "Add `names` to the inner metric names."
-        self._added_met_names = names
+        if hasattr(self, '_added_met_names'): self._added_met_names += names
+        else:                                 self._added_met_names  = names
 
     def plot_lr(self, show_moms=False, skip_start:int=0, skip_end:int=0, return_fig:bool=None)->Optional[plt.Figure]:
         "Plot learning rate, `show_moms` to include momentum."
-        iterations = range_of(self.lrs)
-        lrs = self.lrs[skip_start:-skip_end] if skip_end > 0 else self.lrs[skip_start:]
-        iterations = iterations[skip_start:-skip_end] if skip_end > 0 else iterations[skip_start:]
+        lrs = self._split_list(self.lrs, skip_start, skip_end)
+        iterations = self._split_list(range_of(self.lrs), skip_start, skip_end)
         if show_moms:
-            moms = self.moms[skip_start:-skip_end] if skip_end > 0 else self.moms[skip_start:]
+            moms = self._split_list(self.moms, skip_start, skip_end)
             fig, axs = plt.subplots(1,2, figsize=(12,4))
             axs[0].plot(iterations, lrs)
             axs[0].set_xlabel('Iterations')
@@ -496,6 +503,8 @@ class Recorder(LearnerCallback):
         else:
             fig, ax = plt.subplots()
             ax.plot(iterations, lrs)
+            ax.set_xlabel('Iterations')
+            ax.set_ylabel('Learning Rate')
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
 
@@ -509,8 +518,8 @@ class Recorder(LearnerCallback):
     def plot(self, skip_start:int=10, skip_end:int=5, suggestion:bool=False, return_fig:bool=None,
              **kwargs)->Optional[plt.Figure]:
         "Plot learning rate and losses, trimmed between `skip_start` and `skip_end`. Optionally plot and return min gradient"
-        lrs = self.lrs[skip_start:-skip_end] if skip_end > 0 else self.lrs[skip_start:]
-        losses = self.losses[skip_start:-skip_end] if skip_end > 0 else self.losses[skip_start:]
+        lrs = self._split_list(self.lrs, skip_start, skip_end)
+        losses = self._split_list(self.losses, skip_start, skip_end)
         losses = [x.item() for x in losses]
         if 'k' in kwargs: losses = self.smoothen_by_spline(lrs, losses, **kwargs)
         fig, ax = plt.subplots(1,1)
@@ -533,15 +542,11 @@ class Recorder(LearnerCallback):
     def plot_losses(self, skip_start:int=0, skip_end:int=0, return_fig:bool=None)->Optional[plt.Figure]:
         "Plot training and validation losses."
         fig, ax = plt.subplots(1,1)
-        iterations = range_of(self.losses)
-        losses = self.losses[skip_start:-skip_end] if skip_end > 0 else self.losses[skip_start:]
-        iterations = iterations[skip_start:-skip_end] if skip_end > 0 else iterations[skip_start:]
+        losses = self._split_list(self.losses, skip_start, skip_end)
+        iterations = self._split_list(range_of(self.losses), skip_start, skip_end)
         ax.plot(iterations, losses, label='Train')
-        val_iter = np.cumsum(self.nb_batches)
-        start_val = (val_iter - skip_start >= 0).nonzero()[0].min()
-        end_val = (val_iter[-1] - val_iter - skip_end >= 0).nonzero()[0].max()+1
-        val_iter = val_iter[start_val:end_val] if skip_end > 0 else val_iter[start_val:]
-        val_losses = self.val_losses[start_val:end_val] if skip_end > 0 else self.val_losses[start_val:]
+        val_iter = self._split_list_val(np.cumsum(self.nb_batches), skip_start, skip_end)
+        val_losses = self._split_list_val(self.val_losses, skip_start, skip_end)
         ax.plot(val_iter, val_losses, label='Validation')
         ax.set_ylabel('Loss')
         ax.set_xlabel('Batches processed')
@@ -549,18 +554,27 @@ class Recorder(LearnerCallback):
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
 
-    def plot_metrics(self, return_fig:bool=None)->Optional[plt.Figure]:
+    def plot_metrics(self, skip_start:int=0, skip_end:int=0, return_fig:bool=None)->Optional[plt.Figure]:
         "Plot metrics collected during training."
         assert len(self.metrics) != 0, "There are no metrics to plot."
         fig, axes = plt.subplots(len(self.metrics[0]),1,figsize=(6, 4*len(self.metrics[0])))
-        val_iter = self.nb_batches
-        val_iter = np.cumsum(val_iter)
+        val_iter = self._split_list_val(np.cumsum(self.nb_batches), skip_start, skip_end)
         axes = axes.flatten() if len(self.metrics[0]) != 1 else [axes]
         for i, ax in enumerate(axes):
             values = [met[i] for met in self.metrics]
+            values = self._split_list_val(values, skip_start, skip_end)
             ax.plot(val_iter, values)
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
+
+    def _split_list(self, vals:Collection[float], skip_start:int, skip_end:int):
+        return vals[skip_start:-skip_end] if skip_end > 0 else vals[skip_start:]
+
+    def _split_list_val(self, vals:Collection[float], skip_start:int, skip_end:int):
+        val_iter = np.cumsum(self.nb_batches)
+        start_val = (val_iter - skip_start >= 0).nonzero()[0].min()
+        end_val = (val_iter[-1] - val_iter - skip_end >= 0).nonzero()[0].max()+1
+        return vals[start_val:end_val] if skip_end > 0 else vals[start_val:]
 
 class FakeOptimizer():
     def step(self): pass
@@ -572,9 +586,10 @@ def load_callback(class_func, state, learn:Learner):
     for k,v in others.items(): setattr(res, k, v)
     return res
 
-def load_learner(path:PathOrStr, fname:PathOrStr='export.pkl', test:ItemList=None, **db_kwargs):
-    "Load a `Learner` object saved with `export_state` in `path/fn` with empty data, optionally add `test` and load on `cpu`."
-    state = torch.load(Path(path)/fname, map_location='cpu') if defaults.device == torch.device('cpu') else torch.load(Path(path)/fname)
+def load_learner(path:PathOrStr, file:PathLikeOrBinaryStream='export.pkl', test:ItemList=None, **db_kwargs):
+    "Load a `Learner` object saved with `export_state` in `path/file` with empty data, optionally add `test` and load on `cpu`. `file` can be file-like (file or buffer)"
+    source = Path(path)/file if is_pathlike(file) else file
+    state = torch.load(source, map_location='cpu') if defaults.device == torch.device('cpu') else torch.load(source)
     model = state.pop('model')
     src = LabelLists.load_state(path, state.pop('data'))
     if test is not None: src.add_test(test)

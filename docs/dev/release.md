@@ -1152,16 +1152,15 @@ When experimenting with different builds (in particular custom conda builds) the
 While CI builds now do exactly this, it might be still useful to be able to do it manually, since CI builds are very slow to tweak and experiment with. So here is a quick copy-n-paste recipe to build one and clean it up.
 
 ```
-conda create -y  python=3.6 --name fastai-py3.6
-conda activate fastai-py3.6
+conda create -y python=3.7 --name fastai-py3.7
+conda activate fastai-py3.7
 conda install -y conda
 conda install -y pip setuptools
-conda install -y -c pytorch pytorch cuda92 torchvision
-conda install -c fastai fastai
+conda install -y -c fastai -c pytorch fastai
 conda uninstall -y fastai
-pip install -e .
+pip install -e ".[dev]"
 conda deactivate
-conda env remove -y --name fastai-py3.6
+conda env remove -y --name fastai-py3.7
 ```
 
 ### Installed Packages
@@ -1430,17 +1429,24 @@ rm req1.txt req2.txt req.txt
 The same can be repeated for getting test requirements, just repeat the same process inside `tests` directory.
 
 
-### Copying packages for other channels
+### Copying packages from other channels
 
-Currently we want to use the version of spacy and some of its deps from the conda-forge channel, instead of the main anaconda channel. To do this, we copy the relevant packages in to our channel, as so:
+Currently we want to use the version of `spacy` and some of its deps from the `conda-forge` channel, instead of the main `anaconda` channel. To do this, we copy the desired packages and their dependencies in to our channel with:
 
 ```
-anaconda copy conda-forge/spacy/2.0.18 --to-owner fastai --from-label gcc7
-anaconda copy conda-forge/regex/2018.01.10 --to-owner fastai --from-label gcc7
-anaconda copy conda-forge/thinc/6.12.1 --to-owner fastai --from-label gcc7
+anaconda copy conda-forge/spacy/2.0.18 --to-owner fastai
+anaconda copy conda-forge/regex/2018.01.10 --to-owner fastai
+anaconda copy conda-forge/thinc/6.12.1 --to-owner fastai
 ```
 
-This copies all architectures, not just your current architecture.
+This copies all available architectures, and not just your current architecture.
+
+To copy from a specific label, e.g. `gcc7`, add `--from-label gcc7` to the commands above.
+
+Note that you can't re-copy. If for example the source has changed, or added an architecture. Currently, you have to delete the copy from the `fastai` channel and re-copy. Try to do that as fast as possible not to impact users.
+
+
+
 
 
 ### Conditional Dependencies

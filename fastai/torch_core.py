@@ -55,10 +55,9 @@ fastai_types = {
     TensorImageSize:'TensorImageSize', Tensors:'Tensors', Weights:'Weights', AffineFunc:'AffineFunc',
     HookFunc:'HookFunc', LogitTensorImage:'LogitTensorImage', LossFunction:'LossFunction', MetricFunc:'MetricFunc',
     MetricFuncList:'MetricFuncList', MetricsList:'MetricsList', OptLossFunc:'OptLossFunc', OptMetrics:'OptMetrics',
-    OptSplitFunc:'OptSplitFunc', PixelFunc:'PixelFunc', LightingFunc:'LightingFunc', IntsOrStrs:'IntsOrStrs'
+    OptSplitFunc:'OptSplitFunc', PixelFunc:'PixelFunc', LightingFunc:'LightingFunc', IntsOrStrs:'IntsOrStrs',
+    PathLikeOrBinaryStream:'PathLikeOrBinaryStream'
 }
-
-torch.set_num_threads(4) # OpenMP doesn't generally like too many threads
 
 bn_types = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
 bias_types = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.ConvTranspose1d, nn.ConvTranspose2d, nn.ConvTranspose3d)
@@ -193,6 +192,9 @@ def split_model(model:nn.Module=None, splits:Collection[Union[nn.Module,ModuleLi
         return split_model_idx(model, idxs)
     return [nn.Sequential(*s) for s in splits]
 
+def get_param_groups(layer_groups:Collection[nn.Module])->List[List[nn.Parameter]]:
+    return [sum([list(trainable_params(c)) for c in l.children()], []) for l in layer_groups]
+
 def split_no_wd_params(layer_groups:Collection[nn.Module])->List[List[nn.Parameter]]:
     "Separate the parameters in `layer_groups` between `no_wd_types` and  bias (`bias_types`) from the rest."
     split_params = []
@@ -208,7 +210,7 @@ def split_no_wd_params(layer_groups:Collection[nn.Module])->List[List[nn.Paramet
         #Since we scan the children separately, we might get duplicates (tied weights). We need to preserve the order
         #for the optimizer load of state_dict
         l1,l2 = uniqueify(l1),uniqueify(l2)
-        split_params += [l1, l2]      
+        split_params += [l1, l2]
     return split_params
 
 def set_bn_eval(m:nn.Module)->None:
@@ -399,11 +401,12 @@ def rank_distrib():
 
 def add_metrics(last_metrics:Collection[Rank0Tensor], mets:Union[Rank0Tensor, Collection[Rank0Tensor]]):
     "Return a dictionary for updating `last_metrics` with `mets`."
-    mets = listify(mets)
+    last_metrics,mets = listify(last_metrics),listify(mets)
     return {'last_metrics': last_metrics + mets}
 
-def try_save(state:Dict, path:Path, fname:PathOrStr):
-    try: torch.save(state, open(path/fname, 'wb'))
+def try_save(state:Dict, path:Path=None, file:PathLikeOrBinaryStream=None):
+    target = open(path/file, 'wb') if is_pathlike(file) else file
+    try: torch.save(state, target)
     except OSError as e:
-        raise Exception(f"{e}\n Can't write {path/fname}. Pass an absolute writable pathlib obj `fname`.")
+        raise Exception(f"{e}\n Can't write {path/file}. Pass an absolute writable pathlib obj `fname`.")
 

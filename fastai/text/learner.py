@@ -46,13 +46,13 @@ class RNNLearner(Learner):
     "Basic class for a `Learner` in NLP."
     def __init__(self, data:DataBunch, model:nn.Module, split_func:OptSplitFunc=None, clip:float=None,
                  alpha:float=2., beta:float=1., metrics=None, **learn_kwargs):
-        super().__init__(data, model, **learn_kwargs)
+        is_class = (hasattr(data.train_ds, 'y') and (isinstance(data.train_ds.y, CategoryList) or 
+                                                     isinstance(data.train_ds.y, LMLabelList)))
+        metrics = ifnone(metrics, ([accuracy] if is_class else []))
+        super().__init__(data, model, metrics=metrics, **learn_kwargs)
         self.callbacks.append(RNNTrainer(self, alpha=alpha, beta=beta))
         if clip: self.callback_fns.append(partial(GradientClipping, clip=clip))
         if split_func: self.split(split_func)
-        is_class = (hasattr(self.data.train_ds, 'y') and (isinstance(self.data.train_ds.y, CategoryList) or 
-                                                          isinstance(self.data.train_ds.y, LMLabelList)))
-        self.metrics = ifnone(metrics, ([accuracy] if is_class else []))
 
     def save_encoder(self, name:str):
         "Save the encoder to `name` inside the model directory."
@@ -60,11 +60,13 @@ class RNNLearner(Learner):
         if hasattr(encoder, 'module'): encoder = encoder.module
         torch.save(encoder.state_dict(), self.path/self.model_dir/f'{name}.pth')
 
-    def load_encoder(self, name:str):
+    def load_encoder(self, name:str, device:torch.device=None):
         "Load the encoder `name` from the model directory."
         encoder = get_model(self.model)[0]
+        if device is None: device = self.data.device
         if hasattr(encoder, 'module'): encoder = encoder.module
         encoder.load_state_dict(torch.load(self.path/self.model_dir/f'{name}.pth'))
+        encoder.load_state_dict(torch.load(self.path/self.model_dir/f'{name}.pth', map_location=device))
         self.freeze()
 
     def load_pretrained(self, wgts_fname:str, itos_fname:str, strict:bool=True):
@@ -80,8 +82,10 @@ class RNNLearner(Learner):
                   ordered:bool=False) -> List[Tensor]:
         "Return predictions and targets on the valid, train, or test set, depending on `ds_type`."
         self.model.reset()
+        if ordered: np.random.seed(42)
         preds = super().get_preds(ds_type=ds_type, with_loss=with_loss, n_batch=n_batch, pbar=pbar)
         if ordered and hasattr(self.dl(ds_type), 'sampler'):
+            np.random.seed(42)
             sampler = [i for i in self.dl(ds_type).sampler]
             reverse_sampler = np.argsort(sampler)
             preds = [p[reverse_sampler] for p in preds] 
@@ -156,7 +160,7 @@ class LanguageLearner(RNNLearner):
                 xb = nodes[:,-1][:,None]
         if temperature != 1.: scores.div_(temperature)
         node_idx = torch.multinomial(torch.exp(-scores), 1).item()
-        return sep.join(decoder(self.data.vocab.textify([i.item() for i in nodes[node_idx][1:] ], sep=None)))
+        return text + sep + sep.join(decoder(self.data.vocab.textify([i.item() for i in nodes[node_idx][1:] ], sep=None)))
 
     def show_results(self, ds_type=DatasetType.Valid, rows:int=5, max_len:int=20):
         from IPython.display import display, HTML
@@ -229,7 +233,7 @@ class PoolingLinearClassifier(nn.Module):
         raw_outputs,outputs,mask = input
         output = outputs[-1]
         avg_pool = output.masked_fill(mask[:,:,None], 0).mean(dim=1)
-        avg_pool *= output.size(1) / (output.size(1)-mask.float().sum(dim=1))[:,None]
+        avg_pool *= output.size(1) / (output.size(1)-mask.type(avg_pool.dtype).sum(dim=1))[:,None]
         max_pool = output.masked_fill(mask[:,:,None], -float('inf')).max(dim=1)[0]
         x = torch.cat([output[:,-1], max_pool, avg_pool], 1)
         x = self.layers(x)

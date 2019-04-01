@@ -10,6 +10,7 @@ from .docstrings import *
 from .core import *
 from ..torch_core import *
 from .nbtest import get_pytest_html
+from ..utils.ipython import IS_IN_COLAB
 
 __all__ = ['get_fn_link', 'link_docstring', 'show_doc', 'get_ft_names',
            'get_exports', 'show_video', 'show_video_from_youtube', 'import_mod', 'get_source_link',
@@ -58,7 +59,7 @@ def type_repr(t):
     else: return link_type(t)
 
 def partial_repr(t):
-    args = (t.func,) + t.args + tuple([f'k={link_type(v)}' for k,v in t.keywords.items()])
+    args = (t.func,) + t.args + tuple([f'{k}={v}' for k,v in t.keywords.items()])
     reprs = ', '.join([link_type(o) for o in args])
     return f'<code>partial(</code>{reprs}<code>)</code>'
 
@@ -103,7 +104,7 @@ def show_doc(elt, doc_string:bool=True, full_name:str=None, arg_comments:dict=No
              ignore_warn:bool=False, markdown=True, show_tests=True):
     "Show documentation for element `elt`. Supported types: class, Callable, and enum."
     arg_comments = ifnone(arg_comments, {})
-    anchor_id = full_name or get_anchor(elt)
+    anchor_id = get_anchor(elt)
     elt = getattr(elt, '__func__', elt)
     full_name = full_name or fn_name(elt)
     if inspect.isclass(elt):
@@ -132,9 +133,9 @@ def doc(elt):
         md += f'\n\n<a href="{get_fn_link(elt)}" target="_blank" rel="noreferrer noopener">Show in docs</a>'
     output = HTMLExporter().markdown2html(md)
     use_relative_links = True
-    try:    page.page({'text/html': output})
-    except: 
-        try:    get_ipython().run_cell_magic(u'HTML', u'', output)
+    if IS_IN_COLAB: get_ipython().run_cell_magic(u'html', u'', output)
+    else:
+        try: page.page({'text/html': output})
         except: display(Markdown(md))
 
 def format_docstring(elt, arg_comments:dict={}, alt_doc_string:str='', ignore_warn:bool=False)->str:
@@ -279,8 +280,6 @@ def get_fn_link(ft)->str:
     ft = getattr(ft, '__func__', ft)
     anchor = strip_fastai(get_anchor(ft))
     module_name = strip_fastai(get_module_name(ft))
-    func_name = strip_fastai(fn_name(ft))
-    if func_name.startswith('_'): return get_function_source(ft, display_text=None)
     base = '' if use_relative_links else FASTAI_DOCS
     return f'{base}/{module_name}.html#{anchor}'
 
