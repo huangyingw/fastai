@@ -26,7 +26,7 @@ show_doc(StopAfterNBatches)
 # from fastai.callbacks.misc import StopAfterNBatches
 # [...]
 # learn = cnn_learner([...])
-# learn.callbacks.append(StopAfterNBatches(n_batches=2))
+# learn.callbacks.append(StopAfterNBatches(learn, n_batches=2))
 # learn.fit_one_cycle(3, max_lr=1e-2)
 # ```
 # and it'll either fit into the existing memory or it'll immediately fail with OOM error. You may want to add [ipyexperiments](https://github.com/stas00/ipyexperiments/) to show you the memory usage, including the peak usage.
@@ -39,11 +39,15 @@ show_doc(StopAfterNBatches)
 # tune = True
 # #tune = False
 # if tune:
+#     defaults.silent = True # don't print the fit metric headers
 #     defaults.extra_callbacks = [StopAfterNBatches(n_batches=2)]
 # else:
+#     defaults.silent = False
 #     defaults.extra_callbacks = None
 # ```
 # When you're done tuning your hyper-parameters, just set `tune` to `False` and re-run the notebook to do true fitting.
+#
+# The setting `defaults.silent` controls whether [`fit`](/basic_train.html#fit) calls print out any output.
 #
 # Do note that when you run this callback, each fit call will be interrupted resulting in the red colored output - that's just an indication that the normal fit didn't happen, so you shouldn't expect any qualitative results out of it.
 

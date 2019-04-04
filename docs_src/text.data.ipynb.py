@@ -124,7 +124,7 @@ show_doc(TextList, title_level=3)
 # `vocab` contains the correspondence between ids and tokens, `pad_idx` is the id used for padding. You can pass a custom `processor` in the `kwargs` to change the defaults for tokenization or numericalization. It should have the following form:
 
 tokenizer = Tokenizer(SpacyTokenizer, 'en')
-processor = [TokenizeProcessor(tokenizer=tokenizer, NumericalizeProcessor(max_vocab=30000)]
+processor = [TokenizeProcessor(tokenizer=tokenizer), NumericalizeProcessor(max_vocab=30000)]
 
 
 # See below for all the arguments those tokenizers can take.
@@ -161,11 +161,11 @@ show_doc(NumericalizeProcessor, title_level=3)
 
 # A language model is trained to guess what the next word is inside a flow of words. We don't feed it the different texts separately but concatenate them all together in a big array. To create the batches, we split this array into `bs` chunks of continuous texts. Note that in all NLP tasks, we don't use the usual convention of sequence length being the first dimension so batch size is the first dimension and sequence length is the second. Here you can read the chunks of texts in lines.
 
-path=untar_data(URLs.IMDB_SAMPLE)
-data=TextLMDataBunch.from_csv(path, 'texts.csv')
-x, y=next(iter(data.train_dl))
-example=x[:15, :15].cpu()
-texts=pd.DataFrame([data.train_ds.vocab.textify(l).split(' ') for l in example])
+path = untar_data(URLs.IMDB_SAMPLE)
+data = TextLMDataBunch.from_csv(path, 'texts.csv')
+x, y = next(iter(data.train_dl))
+example = x[:15, :15].cpu()
+texts = pd.DataFrame([data.train_ds.vocab.textify(l).split(' ') for l in example])
 texts
 
 
@@ -200,11 +200,11 @@ show_doc(LanguageModelPreLoader)
 #
 # Here is an example of batch with padding (the padding index is 1, and the padding is applied before the sentences start).
 
-path=untar_data(URLs.IMDB_SAMPLE)
-data=TextClasDataBunch.from_csv(path, 'texts.csv')
-iter_dl=iter(data.train_dl)
-_=next(iter_dl)
-x, y=next(iter_dl)
+path = untar_data(URLs.IMDB_SAMPLE)
+data = TextClasDataBunch.from_csv(path, 'texts.csv')
+iter_dl = iter(data.train_dl)
+_ = next(iter_dl)
+x, y = next(iter_dl)
 x[-10:, :20]
 
 

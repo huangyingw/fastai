@@ -27,3 +27,6 @@ y_range = [0, 5.5]
 
 learn = collab_learner(data, n_factors=50, y_range=y_range)
 learn.fit_one_cycle(4, 5e-3)
+
+
+learn.predict(ratings.iloc[0])

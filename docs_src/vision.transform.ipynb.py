@@ -413,7 +413,7 @@ channels = ['Red', 'Green', 'Blue']
 
 for i in np.arange(0, 3):
     for thresh, ax in zip(np.linspace(0.2, 0.99, 3), axs[:, i]):
-        get_ex().rgb_randomise(channel=i, thresh=thresh).show(
+        get_ex().rgb_randomize(channel=i, thresh=thresh).show(
             ax=ax, title=f'{channels[i]}, thresh={thresh}')
 
 

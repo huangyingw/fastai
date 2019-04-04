@@ -340,3 +340,6 @@ update_nb_metadata('utils.ipython.ipynb')
 
 
 update_nb_metadata('callbacks.misc.ipynb')
+
+
+update_nb_metadata('utils.mod_display.ipynb')
