@@ -9,4 +9,5 @@ do
     sed -i"" '/^$/d' "$ss.py"
     sed -i"" '/^#$/d' "$ss.py"
     autopep8 --in-place "$ss.py"
+    cp -nv "$ss.py" "$(echo $ss.py | sed 's/\.ipynb//g' )"
 done
