@@ -59,7 +59,7 @@ def validate(model:nn.Module, dl:DataLoader, loss_func:OptLossFunc=None, cb_hand
             val_loss = loss_batch(model, xb, yb, loss_func, cb_handler=cb_handler)
             val_losses.append(val_loss)
             if not is_listy(yb): yb = [yb]
-            nums.append(yb[0].shape[0])
+            nums.append(first_el(yb).shape[0])
             if cb_handler and cb_handler.on_batch_end(val_losses[-1]): break
             if n_batch and (len(nums)>=n_batch): break
         nums = np.array(nums, dtype=np.float32)
@@ -162,7 +162,6 @@ class Learner():
     def __post_init__(self)->None:
         "Setup path,metrics, callbacks and ensure model directory exists."
         self.path = Path(ifnone(self.path, self.data.path))
-        (self.path/self.model_dir).mkdir(parents=True, exist_ok=True)
         self.model = self.model.to(self.data.device)
         self.loss_func = self.loss_func or self.data.loss_func
         self.metrics=listify(self.metrics)
@@ -175,7 +174,9 @@ class Learner():
 
     def _test_writeable_path(self):
         path = self.path/self.model_dir
-        try: tmp_file = get_tmp_file(path)
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            tmp_file = get_tmp_file(path)
         except OSError as e:
             raise Exception(f"{e}\nCan't write to '{path}', set `learn.model_dir` attribute in Learner to a full libpath path that is writable") from None
         os.remove(tmp_file)
@@ -220,12 +221,10 @@ class Learner():
         "Freeze up to last layer group."
         assert(len(self.layer_groups)>1)
         self.freeze_to(-1)
-        self.create_opt(defaults.lr)
 
     def unfreeze(self):
         "Unfreeze entire model."
         self.freeze_to(0)
-        self.create_opt(defaults.lr)
 
     def export(self, file:PathLikeOrBinaryStream='export.pkl', destroy=False):
         "Export the state of the `Learner` in `self.path/file`. `file` can be file-like (file or buffer)"
@@ -336,14 +335,16 @@ class Learner():
         return get_preds(self.model, self.dl(ds_type), cb_handler=CallbackHandler(self.callbacks),
                          activ=_loss_func2activ(self.loss_func), loss_func=lf, n_batch=n_batch, pbar=pbar)
 
-    def pred_batch(self, ds_type:DatasetType=DatasetType.Valid, batch:Tuple=None, reconstruct:bool=False) -> List[Tensor]:
+    def pred_batch(self, ds_type:DatasetType=DatasetType.Valid, batch:Tuple=None, reconstruct:bool=False, with_dropout:bool=False) -> List[Tensor]:
         "Return output of the model on one batch from `ds_type` dataset."
         if batch is not None: xb,yb = batch
         else: xb,yb = self.data.one_batch(ds_type, detach=False, denorm=False)
         cb_handler = CallbackHandler(self.callbacks)
         xb,yb = cb_handler.on_batch_begin(xb,yb, train=False)
-        preds = loss_batch(self.model.eval(), xb, yb, cb_handler=cb_handler)
-        res = _loss_func2activ(self.loss_func)(preds[0])
+        with torch.no_grad():
+            if not with_dropout: preds = loss_batch(self.model.eval(), xb, yb, cb_handler=cb_handler)
+            else: preds = loss_batch(self.model.eval().apply(self.apply_dropout), xb, yb, cb_handler=cb_handler)
+            res = _loss_func2activ(self.loss_func)(preds[0])
         if not reconstruct: return res
         res = res.detach().cpu()
         ds = self.dl(ds_type).dataset
@@ -359,19 +360,20 @@ class Learner():
                           cb_handler=CallbackHandler(self.callbacks))
         return loss
 
-    def predict(self, item:ItemBase, **kwargs):
+    def predict(self, item:ItemBase, return_x:bool=False, batch_first:bool=True, with_dropout:bool=False, **kwargs):
         "Return predicted class, label and probabilities for `item`."
         batch = self.data.one_item(item)
-        res = self.pred_batch(batch=batch)
-        pred,x = res[0],batch[0]
+        res = self.pred_batch(batch=batch, with_dropout=with_dropout)
+        raw_pred,x = grab_idx(res,0,batch_first=batch_first),batch[0]
         norm = getattr(self.data,'norm',False)
         if norm:
             x = self.data.denorm(x)
-            if norm.keywords.get('do_y',False): pred = self.data.denorm(pred)
+            if norm.keywords.get('do_y',False): raw_pred = self.data.denorm(raw_pred)
         ds = self.data.single_ds
-        pred = ds.y.analyze_pred(pred, **kwargs)
-        out = ds.y.reconstruct(pred, ds.x.reconstruct(x[0])) if has_arg(ds.y.reconstruct, 'x') else ds.y.reconstruct(pred)
-        return out, pred, res[0]
+        pred = ds.y.analyze_pred(raw_pred, **kwargs)
+        x = ds.x.reconstruct(grab_idx(x, 0))
+        y = ds.y.reconstruct(pred, x) if has_arg(ds.y.reconstruct, 'x') else ds.y.reconstruct(pred)
+        return (x, y, pred, raw_pred) if return_x else (y, pred, raw_pred)
 
     def validate(self, dl=None, callbacks=None, metrics=None):
         "Validate on `dl` with potential `callbacks` and `metrics`."
@@ -411,6 +413,14 @@ class Learner():
             zs = [ds.y.reconstruct(z) for z in preds]
         ds.x.show_xyzs(xs, ys, zs, **kwargs)
 
+    def apply_dropout(self, m):
+        "If a module contains 'dropout' in it's name, it will be switched to .train() mode."
+        if 'dropout' in m.__class__.__name__.lower(): m.train()
+
+    def predict_with_mc_dropout(self, item:ItemBase, with_dropout:bool=True, n_times=10, **kwargs):
+        "Make predictions with dropout turned on for n_times (default 10)."
+        return [self.predict(item, with_dropout=with_dropout) for _ in range(n_times)]
+
 class RecordOnCPU(Callback):
     "Store the `input` and `target` going through the model on the CPU."
     def on_batch_begin(self, last_input,last_target,**kwargs):
@@ -447,8 +457,9 @@ class Recorder(LearnerCallback):
         "Initialize recording status at beginning of training."
         self.pbar = pbar
         self.names = ['epoch', 'train_loss'] if self.no_val else ['epoch', 'train_loss', 'valid_loss']
-        self.names += metrics_names
-        if hasattr(self, '_added_met_names'): self.names += self._added_met_names
+        self.metrics_names = metrics_names
+        if hasattr(self, '_added_met_names'): self.metrics_names += self._added_met_names
+        self.names += self.metrics_names
         if self.add_time: self.names.append('time')
         if not self.silent: self.pbar.write(self.names, table=True)
         self.losses,self.val_losses,self.lrs,self.moms,self.metrics,self.nb_batches = [],[],[],[],[],[]
@@ -539,6 +550,8 @@ class Recorder(LearnerCallback):
             print(f"Min numerical gradient: {lrs[mg]:.2E}")
             ax.plot(lrs[mg],losses[mg],markersize=10,marker='o',color='red')
             self.min_grad_lr = lrs[mg]
+            ml = np.argmin(losses)
+            print(f"Min loss divided by 10: {lrs[ml]/10:.2E}")
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
 
@@ -567,6 +580,8 @@ class Recorder(LearnerCallback):
             values = [met[i] for met in self.metrics]
             values = self._split_list_val(values, skip_start, skip_end)
             ax.plot(val_iter, values)
+            ax.set_ylabel(str(self.metrics_names[i]))
+            ax.set_xlabel('Batches processed')             
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
 

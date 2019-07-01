@@ -84,43 +84,43 @@ def tensor(x:Any, *rest)->Tensor:
         return res.long()
     return res
 
+class Module(nn.Module, metaclass=PrePostInitMeta):
+    "Same as `nn.Module`, but no need for subclasses to call `super().__init__`"
+    def __pre_init__(self): super().__init__()
+    def __init__(self): pass
+
 def np_address(x:np.ndarray)->int:
     "Address of `x` in memory."
     return x.__array_interface__['data'][0]
 
 def to_detach(b:Tensors, cpu:bool=True):
     "Recursively detach lists of tensors in `b `; put them on the CPU if `cpu=True`."
-    if is_listy(b): return [to_detach(o, cpu) for o in b]
-    if not isinstance(b,Tensor): return b
-    b = b.detach()
-    return b.cpu() if cpu else b
+    def _inner(x, cpu=True):
+        if not isinstance(x,Tensor): return x
+        x = x.detach()
+        return x.cpu() if cpu else x
+    return recurse(_inner, b, cpu=cpu)
 
 def to_data(b:ItemsList):
     "Recursively map lists of items in `b ` to their wrapped data."
-    if is_listy(b): return [to_data(o) for o in b]
-    return b.data if isinstance(b,ItemBase) else b
+    return recurse(lambda x: x.data if isinstance(x,ItemBase) else x, b)
 
 def to_cpu(b:ItemsList):
     "Recursively map lists of tensors in `b ` to the cpu."
-    if is_listy(b): return [to_cpu(o) for o in b]
-    return b.cpu() if isinstance(b,Tensor) else b
+    return recurse(lambda x: x.cpu() if isinstance(x,Tensor) else x, b)
 
 def to_half(b:Collection[Tensor])->Collection[Tensor]:
     "Recursively map lists of tensors in `b ` to FP16."
-    if is_listy(b): return [to_half(o) for o in b]
-    return b.half() if b.dtype not in [torch.int64, torch.int32, torch.int16] else b
+    return recurse(lambda x: x.half() if x.dtype not in [torch.int64, torch.int32, torch.int16] else x, b)
 
 def to_float(b:Collection[Tensor])->Collection[Tensor]:
     "Recursively map lists of tensors in `b ` to FP16."
-    if is_listy(b): return [to_float(o) for o in b]
-    return b.float() if b.dtype not in [torch.int64, torch.int32, torch.int16] else b
+    return recurse(lambda x: x.float() if x.dtype not in [torch.int64, torch.int32, torch.int16] else x, b)
 
 def to_device(b:Tensors, device:torch.device):
     "Recursively put `b` on `device`."
     device = ifnone(device, defaults.device)
-    if is_listy(b): return [to_device(o, device) for o in b]
-    if is_dict(b): return {k: to_device(v, device) for k, v in b.items()}
-    return b.to(device, non_blocking=True)
+    return recurse(lambda x: x.to(device, non_blocking=True), b)
 
 def data_collate(batch:ItemsList)->Tensor:
     "Convert `batch` items to tensor data."
@@ -150,14 +150,11 @@ def range_children(m:nn.Module)->Iterator[int]:
     "Return iterator of len of children of `m`."
     return range(num_children(m))
 
-class ParameterModule(nn.Module):
+class ParameterModule(Module):
     "Register a lone parameter `p` in a module."
-    def __init__(self, p:nn.Parameter):
-        super().__init__()
-        self.val = p
-    
+    def __init__(self, p:nn.Parameter): self.val = p
     def forward(self, x): return x
-    
+
 def children_and_parameters(m:nn.Module):
     "Return the children of `m` and its direct parameters not registered in modules."
     children = list(m.children())
@@ -234,7 +231,7 @@ def model2half(model:nn.Module)->nn.Module:
     "Convert `model` to half precision except the batchnorm layers."
     return bn2float(model.half())
 
-def init_default(m:nn.Module, func:LayerFunc=nn.init.kaiming_normal_)->None:
+def init_default(m:nn.Module, func:LayerFunc=nn.init.kaiming_normal_)->nn.Module:
     "Initialize `m` weights with `func` and set `bias` to 0."
     if func:
         if hasattr(m, 'weight'): func(m.weight)
@@ -340,6 +337,12 @@ def logit_(x:Tensor)->Tensor:
     x.clamp_(1e-7, 1-1e-7)
     return (x.reciprocal_().sub_(1)).log_().neg_()
 
+def set_all_seed(seed:int)->None:
+    "Sets the seeds for all pseudo random generators in fastai lib"
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+
 def uniform(low:Number, high:Number=None, size:Optional[List[int]]=None)->FloatOrTensor:
     "Draw 1 or shape=`size` random floats from uniform dist: min=`low`, max=`high`."
     if high is None: high=low
@@ -409,4 +412,12 @@ def try_save(state:Dict, path:Path=None, file:PathLikeOrBinaryStream=None):
     try: torch.save(state, target)
     except OSError as e:
         raise Exception(f"{e}\n Can't write {path/file}. Pass an absolute writable pathlib obj `fname`.")
+
+def np_func(f):
+    "Convert a function taking and returning numpy arrays to one taking and returning tensors"
+    def _inner(*args, **kwargs):
+        nargs = [to_np(arg) if isinstance(arg,Tensor) else arg for arg in args]
+        return tensor(f(*nargs, **kwargs))
+    functools.update_wrapper(_inner, f)
+    return _inner
 

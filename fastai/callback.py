@@ -9,6 +9,7 @@ __all__ = ['AverageMetric', 'Callback', 'CallbackHandler', 'OptimWrapper', 'Smoo
 class OptimWrapper():
     "Basic wrapper around `opt` to simplify hyper-parameters changes."
     def __init__(self, opt:optim.Optimizer, wd:Floats=0., true_wd:bool=False, bn_wd:bool=True):
+        assert not isinstance(opt, OptimWrapper)
         self.opt,self.true_wd,self.bn_wd = opt,true_wd,bn_wd
         self.opt_keys = list(self.opt.param_groups[0].keys())
         self.opt_keys.remove('params')
@@ -271,37 +272,37 @@ class CallbackHandler():
         self.state_dict['num_batch'],self.state_dict['stop_training'] = 0,False
         self('epoch_begin')
 
-    def on_batch_begin(self, xb:Tensor, yb:Tensor, train:bool=True)->None:
+    def on_batch_begin(self, xb:Tensor, yb:Tensor, train:bool=True)->Tuple[Any,Any]:
         "Handle new batch `xb`,`yb` in `train` or validation."
         self.state_dict.update(dict(last_input=xb, last_target=yb, train=train, 
             stop_epoch=False, skip_step=False, skip_zero=False, skip_bwd=False))
         self('batch_begin', mets = not self.state_dict['train'])
         return self.state_dict['last_input'], self.state_dict['last_target']
 
-    def on_loss_begin(self, out:Tensor)->None:
+    def on_loss_begin(self, out:Tensor)->Any:
         "Handle start of loss calculation with model output `out`."
         self.state_dict['last_output'] = out
         self('loss_begin', call_mets=False)
         return self.state_dict['last_output']
 
-    def on_backward_begin(self, loss:Tensor)->None:
+    def on_backward_begin(self, loss:Tensor)->Tuple[Any,Any]:
         "Handle gradient calculation on `loss`."
         self.smoothener.add_value(loss.detach().cpu())
         self.state_dict['last_loss'], self.state_dict['smooth_loss'] = loss, self.smoothener.smooth
         self('backward_begin', call_mets=False)
         return self.state_dict['last_loss'], self.state_dict['skip_bwd']
 
-    def on_backward_end(self)->None:
+    def on_backward_end(self)->Any:
         "Handle end of gradient calculation."
         self('backward_end', call_mets=False)
         return self.state_dict['skip_step']
 
-    def on_step_end(self)->None:
+    def on_step_end(self)->Any:
         "Handle end of optimization step."
         self('step_end', call_mets=False)
         return self.state_dict['skip_zero']
 
-    def on_batch_end(self, loss:Tensor)->None:
+    def on_batch_end(self, loss:Tensor)->Any:
         "Handle end of processing one batch with `loss`."
         self.state_dict['last_loss'] = loss
         self('batch_end', call_mets = not self.state_dict['train'])
@@ -327,8 +328,8 @@ class CallbackHandler():
 class AverageMetric(Callback):
     "Wrap a `func` in a callback for metrics computation."
     def __init__(self, func):
-        # If it's a partial, use func.func
-        name = getattr(func,'func', func).__name__
+        # If func has a __name__ use this one else it should be a partial
+        name = func.__name__ if hasattr(func, '__name__') else func.func.__name__
         self.func, self.name = func, name
         self.world = num_distrib()
 
@@ -339,13 +340,13 @@ class AverageMetric(Callback):
     def on_batch_end(self, last_output, last_target, **kwargs):
         "Update metric computation with `last_output` and `last_target`."
         if not is_listy(last_target): last_target=[last_target]
-        self.count += last_target[0].size(0)
+        self.count += first_el(last_target).size(0)
         val = self.func(last_output, *last_target)
         if self.world:
             val = val.clone()
             dist.all_reduce(val, op=dist.ReduceOp.SUM)
             val /= self.world
-        self.val += last_target[0].size(0) * val.detach().cpu()
+        self.val += first_el(last_target).size(0) * val.detach().cpu()
 
     def on_epoch_end(self, last_metrics, **kwargs):
         "Set the final result in `last_metrics`."

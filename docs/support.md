@@ -33,7 +33,7 @@ Before making a new issue report, please:
 
 3. Make sure you follow [the exact installation instructions](https://github.com/fastai/fastai/blob/master/README.md#installation). If you improvise and it works that's great, if it fails please RTFM ;)
 
-4. Check the [Troubleshooting](https://docs.fast.ai/troubleshoot.html) document.
+4. Check the [Troubleshooting](/troubleshoot.html) document.
 
 5. Search [forums](https://forums.fast.ai/) for a similar issues already reported.
 
@@ -52,7 +52,7 @@ When you make a post, make sure to include in your post:
    ```
    git clone https://github.com/fastai/fastai
    cd fastai
-   python -c 'import fastai.utils.collect_env; fastai.utils.collect_env.show_install(1)'
+   python -c 'import fastai.utils; fastai.utils.show_install(1)'
    ```
 
    The reporting script won't work if `pytorch` wasn't installed, so if that's the case, then send in the following details:

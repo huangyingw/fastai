@@ -47,7 +47,8 @@ def cnn_config(arch):
 
 def has_pool_type(m):
     if is_pool_type(m): return True
-    for l in m.children(): return has_pool_type(l)
+    for l in m.children():
+        if has_pool_type(l): return True
     return False
 
 def create_body(arch:Callable, pretrained:bool=True, cut:Optional[Union[int, Callable]]=None):
@@ -98,7 +99,7 @@ def cnn_learner(data:DataBunch, base_arch:Callable, cut:Union[int,Callable]=None
     learn = Learner(data, model, **kwargs)
     learn.split(split_on or meta['split'])
     if pretrained: learn.freeze()
-    if init: apply_init(model[1], nn.init.kaiming_normal_)
+    if init: apply_init(model[1], init)
     return learn
 
 def create_cnn(data, base_arch, **kwargs):
@@ -112,7 +113,9 @@ def unet_learner(data:DataBunch, arch:Callable, pretrained:bool=True, blur_final
     "Build Unet learner from `data` and `arch`."
     meta = cnn_config(arch)
     body = create_body(arch, pretrained, cut)
-    model = to_device(models.unet.DynamicUnet(body, n_classes=data.c, blur=blur, blur_final=blur_final,
+    try:    size = data.train_ds[0][0].size
+    except: size = next(iter(data.train_dl))[0].shape[-2:]
+    model = to_device(models.unet.DynamicUnet(body, n_classes=data.c, img_size=size, blur=blur, blur_final=blur_final,
           self_attention=self_attention, y_range=y_range, norm_type=norm_type, last_cross=last_cross,
           bottle=bottle), data.device)
     learn = Learner(data, model, **learn_kwargs)
@@ -127,9 +130,15 @@ def _cl_int_from_learner(cls, learn:Learner, ds_type:DatasetType=DatasetType.Val
     preds = learn.TTA(ds_type=ds_type, with_loss=True) if tta else learn.get_preds(ds_type=ds_type, with_loss=True)
     return cls(learn, *preds, ds_type=ds_type)
 
-def _cl_int_plot_top_losses(self, k, largest=True, figsize=(12,12), heatmap:bool=True, heatmap_thresh:int=16,
+def _test_cnn(m):
+    if not isinstance(m, nn.Sequential) or not len(m) == 2: return False
+    return isinstance(m[1][0], (AdaptiveConcatPool2d, nn.AdaptiveAvgPool2d))
+
+def _cl_int_plot_top_losses(self, k, largest=True, figsize=(12,12), heatmap:bool=None, heatmap_thresh:int=16,
                             return_fig:bool=None)->Optional[plt.Figure]:
     "Show images in `top_losses` along with their prediction, actual, loss, and probability of actual class."
+    assert not heatmap or _test_cnn(self.learn.model), "`heatmap=True` requires a model like `cnn_learner` produces."
+    if heatmap is None: heatmap = _test_cnn(self.learn.model)
     tl_val,tl_idx = self.top_losses(k, largest)
     classes = self.data.classes
     cols = math.ceil(math.sqrt(k))
@@ -140,7 +149,7 @@ def _cl_int_plot_top_losses(self, k, largest=True, figsize=(12,12), heatmap:bool
         im,cl = self.data.dl(self.ds_type).dataset[idx]
         cl = int(cl)
         im.show(ax=axes.flat[i], title=
-            f'{classes[self.pred_class[idx]]}/{classes[cl]} / {self.losses[idx]:.2f} / {self.probs[idx][cl]:.2f}')
+            f'{classes[self.pred_class[idx]]}/{classes[cl]} / {self.losses[idx]:.2f} / {self.preds[idx][cl]:.2f}')
         if heatmap:
             xb,_ = self.data.one_item(im, detach=False, denorm=False)
             m = self.learn.model.eval()
@@ -176,8 +185,8 @@ def _cl_int_plot_multi_top_losses(self, samples:int=3, figsize:Tuple[int,int]=(8
             mismatches_idxs.append(i)
             if l_dim > 1 : losses_mismatches.append((losses[i][pred], i))
             else: losses_mismatches.append((losses[i], i))
-        if l_dim > 1: infotup = (i, pred, where_truth, losses[i][pred], np.round(self.probs[i], decimals=3)[pred], mismatch)
-        else: infotup = (i, pred, where_truth, losses[i], np.round(self.probs[i], decimals=3)[pred], mismatch)
+        if l_dim > 1: infotup = (i, pred, where_truth, losses[i][pred], np.round(self.preds[i], decimals=3)[pred], mismatch)
+        else: infotup = (i, pred, where_truth, losses[i], np.round(self.preds[i], decimals=3)[pred], mismatch)
         infolist.append(infotup)
     ds = self.data.dl(self.ds_type).dataset
     mismatches = ds[mismatches_idxs]
@@ -185,6 +194,7 @@ def _cl_int_plot_multi_top_losses(self, samples:int=3, figsize:Tuple[int,int]=(8
     for w in ordlosses: ordlosses_idxs.append(w[1])
     mismatches_ordered_byloss = ds[ordlosses_idxs]
     print(f'{str(len(mismatches))} misclassified samples over {str(len(self.data.valid_ds))} samples in the validation set.')
+    samples = min(samples, len(mismatches))
     for ima in range(len(mismatches_ordered_byloss)):
         mismatchescontainer.append(mismatches_ordered_byloss[ima][0])
     for sampleN in range(samples):

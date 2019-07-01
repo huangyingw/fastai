@@ -7,8 +7,10 @@ from utils.text import CaptureStdout
 
 p1 = torch.Tensor([0,1,0,0,0]).expand(5,-1)
 p2 = torch.Tensor([[0,0,0,0,0],[0,1,0,0,0]]).expand(5,2,-1).float()
+p3 = torch.Tensor([[0,0,0,0,0],[0,0,0,0,0]]).expand(5,2,-1).float()
 t1 = torch.arange(5)
 t2 = torch.Tensor([1,1,1,1,0]).expand(5,-1)
+t3 = torch.Tensor([0,0,0,0,0]).expand(5,-1)
 
 # Test data for multi-class single-label sequential models (like language models)
 # batch size: 5, sequence length: 4, classes: 4
@@ -68,6 +70,15 @@ def test_top_k_accuracy(p, t, k, expect):
     this_tests(top_k_accuracy)
     assert np.isclose(top_k_accuracy(p, t, k).item(), expect)
 
+@pytest.mark.parametrize("p, t, expect, atol", [
+    (torch.randn((128, 2, 224, 224)),  torch.randint(0, 2, (128, 1, 224, 224)), 1/2, 1e-3),
+    (torch.randn((128, 8, 224, 224)),  torch.randint(0, 8, (128, 1, 224, 224)), 1/8, 1e-3),
+    (torch.randn((128, 16, 224, 224)),  torch.randint(0, 16, (128, 1, 224, 224)), 1/16, 1e-3),
+])
+def test_foreground_acc(p, t, expect, atol):
+    this_tests(foreground_acc)
+    assert np.isclose(partial(foreground_acc, void_code=0)(p, t).item(), expect, atol=atol)
+
 @pytest.mark.parametrize("p, t, expect", [
     (p1, t1, 0.8),
     (torch.eye(5), t1, 0),
@@ -98,14 +109,15 @@ def test_dice(p, t, expect):
     this_tests(dice)
     assert np.isclose(dice(p, t.long()).item(), expect)
 
-@pytest.mark.parametrize("p, t, expect", [
-    (p2, t2, 0.238095),
-    (p2, torch.eye(5,5), 0.1),
-    (p2, torch.zeros(5,5), 0),
+@pytest.mark.parametrize("p, t, expect, atol", [
+    (p2, t2, 0.25, 0.),
+    (p3, t3, 1.0, 0.),
+    (p2, torch.eye(5,5), 0.111, 1e-3),
+    (p2, torch.zeros(5,5), 0, 0.),
 ])
-def test_dice_iou(p, t, expect):
+def test_dice_iou(p, t, expect, atol):
     this_tests(dice)
-    assert np.isclose(dice(p, t.long(), iou=True).item(), expect)
+    assert np.isclose(dice(p, t.long(), iou=True).item(), expect, atol=atol)
 
 @pytest.mark.parametrize("p, t, expect", [
     (torch.ones(1,10), torch.ones(1,10), 1),
@@ -163,6 +175,17 @@ def test_explained_variance(p, t, expect):
     this_tests(explained_variance)
     assert np.isclose(explained_variance(p, t), expect)
 
+@pytest.mark.parametrize("p, t, expect", [
+    (torch.arange(-5, 5).float(), torch.arange(-5,  5).float(), 1),
+    (torch.zeros(10).float(), torch.arange(-5, 5).float(), -0.0303),
+    (torch.arange(-5, 5).float(), torch.zeros(10).float(), -float("inf")),
+    (p1/2., p1, 0.6875),
+    (p1, t2, -2.75),
+])
+def test_r2_score(p, t, expect):
+    this_tests(r2_score)
+    assert np.isclose(r2_score(p, t), expect, atol=1e-2)
+
 ### metric as a custom class
 dummy_base_val = 9876
 class DummyMetric(Callback):
@@ -186,3 +209,18 @@ def test_custom_metric_class():
     # expecting column header 'dummy', and the metrics per class definition
     for s in ['dummy', f'{dummy_base_val}.00', f'{dummy_base_val**2}.00']:
         assert s in cs.out, f"{s} is in the output:\n{cs.out}"
+
+def test_average_metric_naming():
+    this_tests(AverageMetric)
+    top2_accuracy = partial(top_k_accuracy, k=2)
+    top3_accuracy = partial(top_k_accuracy, k=3)
+    top4_accuracy = partial(top_k_accuracy, k=4)
+    # give top2_accuracy and top4_accuracy a custom name
+    top2_accuracy.__name__ = "top2_accuracy"
+    top4_accuracy.__name__ = "top4_accuracy"
+    # prewrap top4_accuracy
+    top4_accuracy = AverageMetric(top4_accuracy)
+    learn = fake_learner()
+    learn.metrics = [accuracy, top2_accuracy, top3_accuracy, top4_accuracy]
+    learn.fit(1)
+    assert learn.recorder.names[3:7] == ["accuracy", "top2_accuracy", "top_k_accuracy", "top4_accuracy"]

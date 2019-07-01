@@ -33,10 +33,10 @@ class MixUpCallback(LearnerCallback):
         return {'last_input': new_input, 'last_target': new_target}  
     
     def on_train_end(self, **kwargs):
-        self.learn.loss_func = self.learn.loss_func.get_old()
+        if self.stack_y: self.learn.loss_func = self.learn.loss_func.get_old()
         
 
-class MixUpLoss(nn.Module):
+class MixUpLoss(Module):
     "Adapt the loss function `crit` to go with mixup."
     
     def __init__(self, crit, reduction='mean'):

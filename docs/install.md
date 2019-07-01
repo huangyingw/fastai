@@ -8,21 +8,24 @@ Please refer to [README](https://github.com/fastai/fastai/blob/master/README.md#
 
 ## CPU build
 
-Generally, pytorch GPU build should work fine on machines that don't have a CUDA-capable GPU, and will just use the CPU. However, you can install CPU-only versions of Pytorch if needed:
-
-* conda
-
-   ```bash
-   conda install -c pytorch pytorch-cpu torchvision
-   conda install -c fastai fastai
-   ```
+Generally, pytorch GPU build should work fine on machines that don't have a CUDA-capable GPU, and will just use the CPU. However, you can install CPU-only versions of Pytorch if needed with `fastai`.
 
 * pip
+
+   The pip ways is very easy:
 
    ```bash
    pip install http://download.pytorch.org/whl/cpu/torch-1.0.0-cp36-cp36m-linux_x86_64.whl
    pip install fastai
    ```
+
+   Just make sure to pick the correct torch wheel url, according to the needed platform, python and CUDA version, which you will find [here](https://pytorch.org/get-started/locally/).
+
+* conda
+
+   The conda way is more involved. Since we have only a single fastai package that relies on the default `pytorch` package working with and without GPU environment, if you want to install something custom you will have to manually tweak the dependencies. This is explained in detail [here](/install.html#custom-dependencies). So follow the instructions there, but replace `pytorch` with `pytorch-cpu`, and `torchvision` with `torchvision-cpu`.
+
+Also, please note, that if you have an old GPU and `pytorch` fails because it can't support it, you can still use the normal (GPU) `pytorch` build, by setting the env var `CUDA_VISIBLE_DEVICES=""`, in which case pytorch will not try to check if you even have a GPU.
 
 
 ## Jupyter notebook dependencies
@@ -223,4 +226,4 @@ conda env list
 ```
 
 
-Also see [bash-git-prompt](https://docs.fast.ai/dev/git.html#bash-git-prompt) which will help you tell at any moment which environment you're in.
+Also see [bash-git-prompt](/dev/git.html#bash-git-prompt) which will help you tell at any moment which environment you're in.

@@ -74,8 +74,8 @@ class URLs():
 
     #Pretrained models
     OPENAI_TRANSFORMER = f'{S3_MODEL}transformer'
-    WT103               = f'{S3_MODEL}wt103'
-    WT103_1             = f'{S3_MODEL}wt103-1'
+    WT103_FWD          = f'{S3_MODEL}wt103-fwd'
+    WT103_BWD          = f'{S3_MODEL}wt103-bwd'
 
 # to create/update a checksum for ./mnist_var_size_tiny.tgz, run:
 # python -c 'import fastai.datasets; print(fastai.datasets._check_file("mnist_var_size_tiny.tgz"))'
@@ -118,8 +118,8 @@ _checks = {
     URLs.SOGOU_NEWS:(384269937, '950f1366d33be52f5b944f8a8b680902'),
     URLs.WIKITEXT:(190200704, '2dd8cf8693b3d27e9c8f0a7df054b2c7'),
     URLs.WIKITEXT_TINY:(4070055, '2a82d47a7b85c8b6a8e068dc4c1d37e7'),
-    URLs.WT103:(206789489, '76fd08236c78bf91b7fb76698d53afa3'),
-    URLs.WT103_1:(165175630, '9cbe02e9e23b969fee10dc9b8dec6566'),
+    URLs.WT103_FWD:(105067061, '7d1114cd9684bf9d1ca3c9f6a54da6f9'),
+    URLs.WT103_BWD:(105205312, '20b06f5830fd5a891d21044c28d3097f'),
     URLs.YAHOO_ANSWERS:(319476345, '0632a0d236ef3a529c0fa4429b339f68'),
     URLs.YELP_REVIEWS_POLARITY:(166373201, '48c8451c1ad30472334d856b5d294807'),
     URLs.YELP_REVIEWS:(196146755, '1efd84215ea3e30d90e4c33764b889db'),
@@ -186,7 +186,7 @@ def url2name(url): return url.split('/')[-1]
 def url2path(url, data=True, ext:str='.tgz'):
     "Change `url` to a path."
     name = url2name(url)
-    return datapath4file(name, ext=ext) if data else modelpath4file(name, ext=ext)
+    return datapath4file(name, ext=ext, archive=False) if data else modelpath4file(name, ext=ext)
 def _url2tgz(url, data=True, ext:str='.tgz'):
     return datapath4file(f'{url2name(url)}{ext}', ext=ext) if data else modelpath4file(f'{url2name(url)}{ext}', ext=ext)
 
@@ -219,7 +219,7 @@ def _check_file(fname):
     return size,hash_nb
 
 def untar_data(url:str, fname:PathOrStr=None, dest:PathOrStr=None, data=True, force_download=False) -> Path:
-    "Download `url` to `fname` if it doesn't exist, and un-tgz to folder `dest`."
+    "Download `url` to `fname` if `dest` doesn't exist, and un-tgz to folder `dest`."
     dest = url2path(url, data) if dest is None else Path(dest)/url2name(url)
     fname = Path(ifnone(fname, _url2tgz(url, data)))
     if force_download or (fname.exists() and url in _checks and _check_file(fname) != _checks[url]):
@@ -228,8 +228,7 @@ def untar_data(url:str, fname:PathOrStr=None, dest:PathOrStr=None, data=True, fo
         if dest.exists(): shutil.rmtree(dest)
     if not dest.exists():
         fname = download_data(url, fname=fname, data=data)
-        data_archive_dir = Config().data_archive_path()
         if url in _checks:
-            assert _check_file(fname) == _checks[url], f"Downloaded file {fname} does not match checksum expected! Remove that file from {data_archive_dir} and try your code again."
+            assert _check_file(fname) == _checks[url], f"Downloaded file {fname} does not match checksum expected! Remove that file from {Config().data_archive_path()} and try your code again."
         tarfile.open(fname, 'r:gz').extractall(dest.parent)
     return dest

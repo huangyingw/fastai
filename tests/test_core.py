@@ -26,6 +26,16 @@ def test_listify(p, q, expected):
     this_tests(listify)
     assert listify(p, q) == expected
 
+def test_recurse():
+    this_tests(recurse)
+    def to_plus(x, a=1): return recurse(lambda x,a: x+a, x, a)
+    assert to_plus(1) == 2
+    assert to_plus([1,2,3]) == [2,3,4]
+    assert to_plus([1,2,3], a=3) == [4,5,6]
+    assert to_plus({'a': 1, 'b': 2, 'c': 3}) == {'a': 2, 'b': 3, 'c': 4}
+    assert to_plus({'a': 1, 'b': 2, 'c': 3}, a=2) == {'a': 3, 'b': 4, 'c': 5}
+    assert to_plus({'a': 1, 'b': [1,2,3], 'c': {'d': 4, 'e': 5}}) == {'a': 2, 'b': [2, 3, 4], 'c': {'d': 5, 'e': 6}}
+
 def test_ifnone():
     this_tests(ifnone)
     assert ifnone(None, 5) == 5
@@ -222,6 +232,13 @@ def test_subplots_single():
     assert (len(axs) == 1)
     assert (len(axs[0]) == 1)
 
+def test_is1d():
+    this_tests(is1d)
+    assert is1d([1, 2, 3, 4])
+    assert is1d((1, 2, 3, 4))
+    assert not is1d([[1, 2], [3, 4]])
+    assert not is1d(np.array(((1,2), (3,4))))
+
 def test_itembase_eq():
     this_tests(ItemBase.__eq__, Category, FloatItem, MultiCategory)
     c1 = Category(0, 'cat')
@@ -267,6 +284,22 @@ def test_itembase_eq():
     assert t1 == t1
     assert t1 != t2
     assert t1 == t3
+
+    t4 = TestItemBase([1, 2])
+    t5 = TestItemBase([1])
+    t6 = TestItemBase([1, 2])
+
+    assert t4 == t4
+    assert t4 != t5
+    assert t4 == t6
+
+    t7 = TestItemBase([[1]])
+    t8 = TestItemBase([1])
+    t9 = TestItemBase([[1]])
+
+    assert t7 == t7
+    assert t7 != t8
+    assert t7 == t9
 
 def test_itembase_hash():
     this_tests(ItemBase.__eq__, Category.__hash__, FloatItem.__hash__, MultiCategory.__hash__)

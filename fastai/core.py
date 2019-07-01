@@ -54,14 +54,40 @@ def is_dict(x:Any)->bool: return isinstance(x, dict)
 def is_pathlike(x:Any)->bool: return isinstance(x, (str,Path))
 def noop(x): return x
 
+class PrePostInitMeta(type):
+    "A metaclass that calls optional `__pre_init__` and `__post_init__` methods"
+    def __new__(cls, name, bases, dct):
+        x = super().__new__(cls, name, bases, dct)
+        old_init = x.__init__
+        def _pass(self): pass
+        @functools.wraps(old_init)
+        def _init(self,*args,**kwargs):
+            self.__pre_init__()
+            old_init(self, *args,**kwargs)
+            self.__post_init__()
+        x.__init__ = _init
+        if not hasattr(x,'__pre_init__'):  x.__pre_init__  = _pass
+        if not hasattr(x,'__post_init__'): x.__post_init__ = _pass
+        return x
+
 def chunks(l:Collection, n:int)->Iterable:
     "Yield successive `n`-sized chunks from `l`."
     for i in range(0, len(l), n): yield l[i:i+n]
 
+def recurse(func:Callable, x:Any, *args, **kwargs)->Any:
+    if is_listy(x): return [recurse(func, o, *args, **kwargs) for o in x]
+    if is_dict(x):  return {k: recurse(func, v, *args, **kwargs) for k,v in x.items()}
+    return func(x, *args, **kwargs)
+
+def first_el(x: Any)->Any:
+    "Recursively get the first element of `x`."
+    if is_listy(x): return first_el(x[0])
+    if is_dict(x):  return first_el(x[list(d.keys())[0]])
+    return x
+
 def to_int(b:Any)->Union[int,List[int]]:
-    "Convert `b` to an int or list of ints (if `is_listy`); raises exception if not convertible"
-    if is_listy(b): return [to_int(x) for x in b]
-    else:          return int(b)
+    "Recursively convert `b` to an int or list/dict of ints; raises exception if not convertible."
+    return recurse(lambda x: int(x), b)
 
 def ifnone(a:Any,b:Any)->Any:
     "`a` if `a` is not None, otherwise `b`."
@@ -69,7 +95,7 @@ def ifnone(a:Any,b:Any)->Any:
 
 def is1d(a:Collection)->bool:
     "Return `True` if `a` is one-dimensional"
-    return len(a.shape) == 1 if hasattr(a, 'shape') else True
+    return len(a.shape) == 1 if hasattr(a, 'shape') else len(np.array(a).shape) == 1
 
 def uniqueify(x:Series, sort:bool=False)->List:
     "Return sorted unique values of `x`."
@@ -164,7 +190,7 @@ class ItemBase():
     def __eq__(self, other): return recurse_eq(self.data, other.data)
 
 def recurse_eq(arr1, arr2):
-    if is_listy(arr1): return np.all([recurse_eq(x,y) for x,y in zip(arr1,arr2)])
+    if is_listy(arr1): return is_listy(arr2) and len(arr1) == len(arr2) and np.all([recurse_eq(x,y) for x,y in zip(arr1,arr2)])
     else:              return np.all(np.atleast_1d(arr1 == arr2))
         
 def download_url(url:str, dest:str, overwrite:bool=False, pbar:ProgressBar=None,
@@ -317,15 +343,16 @@ def text2html_table(items:Collection[Collection[str]])->str:
     html_code += "  </tbody>\n</table>"
     return html_code
 
-def parallel(func, arr:Collection, max_workers:int=None):
+def parallel(func, arr:Collection, max_workers:int=None, leave=False):
     "Call `func` on every element of `arr` in parallel using `max_workers`."
     max_workers = ifnone(max_workers, defaults.cpus)
-    if max_workers<2: results = [func(o,i) for i,o in enumerate(arr)]
+    if max_workers<2: results = [func(o,i) for i,o in progress_bar(enumerate(arr), total=len(arr), leave=leave)]
     else:
         with ProcessPoolExecutor(max_workers=max_workers) as ex:
             futures = [ex.submit(func,o,i) for i,o in enumerate(arr)]
             results = []
-            for f in progress_bar(concurrent.futures.as_completed(futures), total=len(arr)): results.append(f.result())
+            for f in progress_bar(concurrent.futures.as_completed(futures), total=len(arr), leave=leave): 
+                results.append(f.result())
     if any([o is not None for o in results]): return results
 
 def subplots(rows:int, cols:int, imgsize:int=4, figsize:Optional[Tuple[int,int]]=None, title=None, **kwargs):
@@ -358,3 +385,26 @@ def compose(funcs:List[Callable])->Callable:
 class PrettyString(str):
     "Little hack to get strings to show properly in Jupyter."
     def __repr__(self): return self
+
+def float_or_x(x):
+    "Tries to convert to float, returns x if it can't"
+    try:   return float(x)
+    except:return x
+
+def bunzip(fn:PathOrStr):
+    "bunzip `fn`, raising exception if output already exists"
+    fn = Path(fn)
+    assert fn.exists(), f"{fn} doesn't exist"
+    out_fn = fn.with_suffix('')
+    assert not out_fn.exists(), f"{out_fn} already exists"
+    with bz2.BZ2File(fn, 'rb') as src, out_fn.open('wb') as dst:
+        for d in iter(lambda: src.read(1024*1024), b''): dst.write(d)
+
+@contextmanager
+def working_directory(path:PathOrStr):
+    "Change working directory to `path` and return to previous on exit."
+    prev_cwd = Path.cwd()
+    os.chdir(path)
+    try: yield
+    finally: os.chdir(prev_cwd)
+

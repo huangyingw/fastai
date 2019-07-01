@@ -214,7 +214,7 @@ It's very important that you **always work inside a branch**. If you make any co
 
    If you previously installed `fastai` via `pip` you don't need to uninstall it - `pip` will automatically do it for you when you install `fastai` in the next step.
 
-   Also this is probably a good time for you to deepen your understanding of [Editable installs](https://docs.fast.ai/dev/develop.html#editable-install-explained).
+   Also this is probably a good time for you to deepen your understanding of [Editable installs](/dev/develop.html#editable-install-explained).
 
 2. Install the prerequisites.
 
@@ -263,13 +263,15 @@ Test that your changes don't break things. Choose one according to which project
 
 * `docs_src`
 
-   In the `docs_src` folder, if you made changes to the notebooks, run:
+   In the `docs_src` folder, if you made changes to the code cells of the documentation notebooks, run:
 
    ```
    cd docs_src
    ./run_tests.sh
    ```
    You will need at least 8GB free GPU RAM to run these tests.
+
+   Please ignore this if you're just adding/changing the prose.
 
 ### Step 6. Push Your Changes
 
