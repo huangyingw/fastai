@@ -1,11 +1,12 @@
 "Provides advanced training extensions to `fastai.basic_train`. Includes half-precision, learning rate finder, mixup, and one-cycle"
 from .torch_core import *
+from .callback import *
 from .callbacks import *
 from .basic_data import *
 from .basic_train import *
 
 __all__ = ['BnFreeze', 'GradientClipping', 'ShowGraph', 'Interpretation', 'ClassificationInterpretation', 'MultiLabelClassificationInterpretation',
- 'fit_one_cycle', 'lr_find', 'one_cycle_scheduler', 'to_fp16', 'to_fp32', 'mixup', 'AccumulateScheduler']
+ 'fit_one_cycle', 'lr_find', 'one_cycle_scheduler', 'to_fp16', 'to_fp32', 'mixup', 'AccumulateScheduler', 'fit_fc']
 
 def one_cycle_scheduler(lr_max:float, **kwargs:Any)->OneCycleScheduler:
     "Instantiate a `OneCycleScheduler` with `lr_max`."
@@ -21,6 +22,14 @@ def fit_one_cycle(learn:Learner, cyc_len:int, max_lr:Union[Floats,slice]=default
                                        final_div=final_div, tot_epochs=tot_epochs, start_epoch=start_epoch))
     learn.fit(cyc_len, max_lr, wd=wd, callbacks=callbacks)
 
+def fit_fc(learn:Learner, tot_epochs:int=1, lr:float=defaults.lr,  moms:Tuple[float,float]=(0.95,0.85), start_pct:float=0.72,
+                  wd:float=None, callbacks:Optional[CallbackList]=None)->None:
+    "Fit a model with Flat Cosine Annealing"
+    max_lr = learn.lr_range(lr)
+    callbacks = listify(callbacks)
+    callbacks.append(FlatCosAnnealScheduler(learn, lr, moms=moms, start_pct=start_pct, tot_epochs=tot_epochs))
+    learn.fit(tot_epochs, max_lr, wd=wd, callbacks=callbacks)
+
 def lr_find(learn:Learner, start_lr:Floats=1e-7, end_lr:Floats=10, num_it:int=100, stop_div:bool=True, wd:float=None):
     "Explore lr from `start_lr` to `end_lr` over `num_it` iterations in `learn`. If `stop_div`, stops when loss diverges."
     start_lr = learn.lr_range(start_lr)
@@ -32,13 +41,13 @@ def lr_find(learn:Learner, start_lr:Floats=1e-7, end_lr:Floats=10, num_it:int=10
     learn.fit(epochs, start_lr, callbacks=[cb], wd=wd)
 
 def to_fp16(learn:Learner, loss_scale:float=None, max_noskip:int=1000, dynamic:bool=True, clip:float=None,
-            flat_master:bool=False, max_scale:float=2**24)->Learner:
+            flat_master:bool=False, max_scale:float=2**24, loss_fp32:bool=True)->Learner:
     "Put `learn` in FP16 precision mode."
     learn.to_fp32()
     learn.model = model2half(learn.model)
     learn.data.add_tfm(batch_to_half)
     learn.mp_cb = MixedPrecision(learn, loss_scale=loss_scale, max_noskip=max_noskip, dynamic=dynamic, clip=clip,
-                                 flat_master=flat_master, max_scale=max_scale)
+                                 flat_master=flat_master, max_scale=max_scale, loss_fp32=loss_fp32)
     learn.callbacks.append(learn.mp_cb)
     return learn
 
@@ -60,6 +69,7 @@ Learner.lr_find = lr_find
 Learner.to_fp16 = to_fp16
 Learner.to_fp32 = to_fp32
 Learner.mixup = mixup
+Learner.fit_fc = fit_fc
 
 class ShowGraph(LearnerCallback):
     "Update a graph of learner stats and metrics after each epoch."
@@ -145,9 +155,9 @@ class Interpretation():
                    self.data.fix_ds)
 
     @classmethod
-    def from_learner(cls, learn: Learner,  ds_type:DatasetType=DatasetType.Valid):
+    def from_learner(cls, learn: Learner,  ds_type:DatasetType=DatasetType.Valid, activ:nn.Module=None):
         "Gets preds, y_true, losses to construct base class from a learner"
-        preds_res = learn.get_preds(ds_type=ds_type, with_loss=True)
+        preds_res = learn.get_preds(ds_type=ds_type, activ=activ, with_loss=True)
         return cls(learn, *preds_res)
 
     def top_losses(self, k:int=None, largest=True):
@@ -163,7 +173,7 @@ class Interpretation():
 class ClassificationInterpretation(Interpretation):
     "Interpretation methods for classification models."
     def __init__(self, learn:Learner, preds:Tensor, y_true:Tensor, losses:Tensor, ds_type:DatasetType=DatasetType.Valid):
-        super(ClassificationInterpretation, self).__init__(learn,preds,y_true,losses,ds_type)
+        super().__init__(learn,preds,y_true,losses,ds_type)
         self.pred_class = self.preds.argmax(dim=1)
 
     def confusion_matrix(self, slice_size:int=1):
@@ -197,6 +207,9 @@ class ClassificationInterpretation(Interpretation):
                 coeff = f'{cm[i, j]:.{norm_dec}f}' if normalize else f'{cm[i, j]}'
                 plt.text(j, i, coeff, horizontalalignment="center", verticalalignment="center", color="white" if cm[i, j] > thresh else "black")
 
+        ax = fig.gca()
+        ax.set_ylim(len(self.data.y.classes)-.5,-.5)
+                           
         plt.tight_layout()
         plt.ylabel('Actual')
         plt.xlabel('Predicted')
@@ -224,3 +237,4 @@ class MultiLabelClassificationInterpretation(Interpretation):
         raise NotImplementedError
         super(MultiLabelClassificationInterpretation, self).__init__(learn,preds,y_true,losses,ds_type)
         self.pred_class = self.preds.sigmoid(dim=1)>thresh if sigmoid else self.preds>thresh
+       

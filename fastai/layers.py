@@ -145,7 +145,7 @@ class SequentialEx(Module):
     def insert(self,i,l): return self.layers.insert(i,l)
 
 class MergeLayer(Module):
-    "Merge a shortcut with the result of the module by adding them or concatenating thme if `dense=True`."
+    "Merge a shortcut with the result of the module by adding them or concatenating them if `dense=True`."
     def __init__(self, dense:bool=False): self.dense=dense
     def forward(self, x): return torch.cat([x,x.orig], dim=1) if self.dense else (x+x.orig)
 
@@ -211,11 +211,12 @@ class PixelShuffle_ICNR(Module):
         # - https://arxiv.org/abs/1806.02658
         self.pad = nn.ReplicationPad2d((1,0,1,0))
         self.blur = nn.AvgPool2d(2, stride=1)
+        self.do_blur = blur
         self.relu = relu(True, leaky=leaky)
 
     def forward(self,x):
         x = self.shuf(self.relu(self.conv(x)))
-        return self.blur(self.pad(x)) if self.blur else x
+        return self.blur(self.pad(x)) if self.do_blur else x
 
 class FlattenedLoss():
     "Same as `func`, but flattens input and target."
@@ -228,6 +229,11 @@ class FlattenedLoss():
     def reduction(self): return self.func.reduction
     @reduction.setter
     def reduction(self, v): self.func.reduction = v
+
+    @property
+    def weight(self): return self.func.weight
+    @weight.setter
+    def weight(self, v): self.func.weight = v
 
     def __call__(self, input:Tensor, target:Tensor, **kwargs)->Rank0Tensor:
         input = input.transpose(self.axis,-1).contiguous()

@@ -76,6 +76,9 @@ entries:
           title: Tracking
           url: /callbacks.tracker.html
         - output: web,pdf
+          title: Tensorboard
+          url: /callbacks.tensorboard.html
+        - output: web,pdf
           title: Memory Profiling
           url: /callbacks.mem.html
         - output: web,pdf
@@ -118,9 +121,6 @@ entries:
         - output: web,pdf
           title: vision.models.unet
           url: /vision.models.unet.html
-        - output: web,pdf
-          title: widgets.image_cleaner
-          url: /widgets.image_cleaner.html
         title: vision
       - output: web
         subfolderitems:
@@ -157,7 +157,19 @@ entries:
         - output: web,pdf
           title: tabular.models
           url: /tabular.models.html
+        - output: web,pdf
+          title: tabular.learner
+          url: /tabular.learner.html
         title: tabular
+      - output: web
+        subfolderitems:
+        - output: web,pdf
+          title: widgets.class_confusion
+          url: /widgets.class_confusion.html
+        - output: web,pdf
+          title: widgets.image_cleaner
+          url: /widgets.image_cleaner.html
+        title: widgets
     - output: web,pdf
       title: collab
       url: /collab.html

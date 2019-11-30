@@ -8,7 +8,7 @@ import matplotlib.cm as cm
 
 __all__ = ['EmbeddingDropout', 'LinearDecoder', 'AWD_LSTM', 'RNNDropout',
            'SequentialRNN', 'WeightDropout', 'dropout_mask', 'awd_lstm_lm_split', 'awd_lstm_clas_split',
-           'awd_lstm_lm_config', 'awd_lstm_clas_config', 'TextClassificationInterpretation']
+           'awd_lstm_lm_config', 'awd_lstm_clas_config']
 
 def dropout_mask(x:Tensor, sz:Collection[int], p:float):
     "Return a dropout mask of the same type as `x`, size `sz`, with probability `p` to cancel an element."
@@ -17,9 +17,7 @@ def dropout_mask(x:Tensor, sz:Collection[int], p:float):
 class RNNDropout(Module):
     "Dropout with probability `p` that is consistent on the seq_len dimension."
 
-    def __init__(self, p:float=0.5):
-        super().__init__()
-        self.p=p
+    def __init__(self, p:float=0.5): self.p=p
 
     def forward(self, x:Tensor)->Tensor:
         if not self.training or self.p == 0.: return x
@@ -30,7 +28,6 @@ class WeightDropout(Module):
     "A module that warps another layer in which some weights will be replaced by 0 during training."
 
     def __init__(self, module:nn.Module, weight_p:float, layer_names:Collection[str]=['weight_hh_l0']):
-        super().__init__()
         self.module,self.weight_p,self.layer_names = module,weight_p,layer_names
         for layer in self.layer_names:
             #Makes a copy of the weights of the selected layers.
@@ -61,7 +58,6 @@ class EmbeddingDropout(Module):
     "Apply dropout with probabily `embed_p` to an embedding layer `emb`."
 
     def __init__(self, emb:nn.Module, embed_p:float):
-        super().__init__()
         self.emb,self.embed_p = emb,embed_p
         self.pad_idx = self.emb.padding_idx
         if self.pad_idx is None: self.pad_idx = -1
@@ -83,7 +79,6 @@ class AWD_LSTM(Module):
 
     def __init__(self, vocab_sz:int, emb_sz:int, n_hid:int, n_layers:int, pad_token:int=1, hidden_p:float=0.2,
                  input_p:float=0.6, embed_p:float=0.1, weight_p:float=0.5, qrnn:bool=False, bidir:bool=False):
-        super().__init__()
         self.bs,self.qrnn,self.emb_sz,self.n_hid,self.n_layers = 1,qrnn,emb_sz,n_hid,n_layers
         self.n_dir = 2 if bidir else 1
         self.encoder = nn.Embedding(vocab_sz, emb_sz, padding_idx=pad_token)
@@ -105,7 +100,7 @@ class AWD_LSTM(Module):
         self.input_dp = RNNDropout(input_p)
         self.hidden_dps = nn.ModuleList([RNNDropout(hidden_p) for l in range(n_layers)])
 
-    def forward(self, input:Tensor, from_embeddings:bool=False)->Tuple[Tensor,Tensor]:
+    def forward(self, input:Tensor, from_embeddings:bool=False)->Tuple[List[Tensor],List[Tensor]]:
         if from_embeddings: bs,sl,es = input.size()
         else: bs,sl = input.size()
         if bs!=self.bs:
@@ -143,7 +138,6 @@ class LinearDecoder(Module):
     initrange=0.1
 
     def __init__(self, n_out:int, n_hid:int, output_p:float, tie_encoder:nn.Module=None, bias:bool=True):
-        super().__init__()
         self.decoder = nn.Linear(n_hid, n_out, bias=bias)
         self.decoder.weight.data.uniform_(-self.initrange, self.initrange)
         self.output_dp = RNNDropout(output_p)
@@ -162,12 +156,12 @@ class SequentialRNN(nn.Sequential):
         for c in self.children():
             if hasattr(c, 'reset'): c.reset()
 
-def awd_lstm_lm_split(model:nn.Module) -> List[nn.Module]:
+def awd_lstm_lm_split(model:nn.Module) -> List[List[nn.Module]]:
     "Split a RNN `model` in groups for differential learning rates."
     groups = [[rnn, dp] for rnn, dp in zip(model[0].rnns, model[0].hidden_dps)]
     return groups + [[model[0].encoder, model[0].encoder_dp, model[1]]]
 
-def awd_lstm_clas_split(model:nn.Module) -> List[nn.Module]:
+def awd_lstm_clas_split(model:nn.Module) -> List[List[nn.Module]]:
     "Split a RNN `model` in groups for differential learning rates."
     groups = [[model[0].module.encoder, model[0].module.encoder_dp]]
     groups += [[rnn, dp] for rnn, dp in zip(model[0].module.rnns, model[0].module.hidden_dps)]
@@ -204,64 +198,3 @@ def _eval_dropouts(mod):
         module_name =  mod.__class__.__name__
         if 'Dropout' in module_name or 'BatchNorm' in module_name: mod.training = False
         for module in mod.children(): _eval_dropouts(module)
-            
-class TextClassificationInterpretation(ClassificationInterpretation):
-    """Provides an interpretation of classification based on input sensitivity.
-    This was designed for AWD-LSTM only for the moment, because Transformer already has its own attentional model.
-    """
-
-    def __init__(self, learn: Learner, preds: Tensor, y_true: Tensor, losses: Tensor, ds_type: DatasetType = DatasetType.Valid):
-        super(TextClassificationInterpretation, self).__init__(learn,preds,y_true,losses,ds_type)
-        self.model = learn.model
-
-    def intrinsic_attention(self, text:str, class_id:int=None):
-        """Calculate the intrinsic attention of the input w.r.t to an output `class_id`, or the classification given by the model if `None`.
-        For reference, see the Sequential Jacobian session at https://www.cs.toronto.edu/~graves/preprint.pdf
-        """
-        self.model.train()
-        _eval_dropouts(self.model)
-        self.model.zero_grad()
-        self.model.reset()
-        ids = self.data.one_item(text)[0]
-        emb = self.model[0].module.encoder(ids).detach().requires_grad_(True)
-        lstm_output = self.model[0].module(emb, from_embeddings=True)
-        self.model.eval()
-        cl = self.model[1](lstm_output + (torch.zeros_like(ids).byte(),))[0].softmax(dim=-1)
-        if class_id is None: class_id = cl.argmax()
-        cl[0][class_id].backward()
-        attn = emb.grad.squeeze().abs().sum(dim=-1)
-        attn /= attn.max()
-        tokens = self.data.single_ds.reconstruct(ids[0])
-        return tokens, attn
-
-    def html_intrinsic_attention(self, text:str, class_id:int=None, **kwargs)->str:
-        text, attn = self.intrinsic_attention(text, class_id)
-        return piece_attn_html(text.text.split(), to_np(attn), **kwargs)
-
-    def show_intrinsic_attention(self, text:str, class_id:int=None, **kwargs)->None:
-        text, attn = self.intrinsic_attention(text, class_id)
-        show_piece_attn(text.text.split(), to_np(attn), **kwargs)
-
-    def show_top_losses(self, k:int, max_len:int=70)->None:
-        """
-        Create a tabulation showing the first `k` texts in top_losses along with their prediction, actual,loss, and probability of
-        actual class. `max_len` is the maximum number of tokens displayed.
-        """
-        from IPython.display import display, HTML
-        items = []
-        tl_val,tl_idx = self.top_losses()
-        for i,idx in enumerate(tl_idx):
-            if k <= 0: break
-            k -= 1
-            tx,cl = self.data.dl(self.ds_type).dataset[idx]
-            cl = cl.data
-            classes = self.data.classes
-            txt = ' '.join(tx.text.split(' ')[:max_len]) if max_len is not None else tx.text
-            tmp = [txt, f'{classes[self.pred_class[idx]]}', f'{classes[cl]}', f'{self.losses[idx]:.2f}',
-                   f'{self.preds[idx][cl]:.2f}']
-            items.append(tmp)
-        items = np.array(items)
-        names = ['Text', 'Prediction', 'Actual', 'Loss', 'Probability']
-        df = pd.DataFrame({n:items[:,i] for i,n in enumerate(names)}, columns=names)
-        with pd.option_context('display.max_colwidth', -1):
-            display(HTML(df.to_html(index=False)))

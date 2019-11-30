@@ -27,15 +27,16 @@ def _get_files(parent, p, f, extensions):
            and (extensions is None or f'.{o.split(".")[-1].lower()}' in low_extensions)]
     return res
 
-def get_files(path:PathOrStr, extensions:Collection[str]=None, recurse:bool=False,
-              include:Optional[Collection[str]]=None, presort:bool=False)->FilePathList:
+def get_files(path:PathOrStr, extensions:Collection[str]=None, recurse:bool=False, exclude:Optional[Collection[str]]=None,
+              include:Optional[Collection[str]]=None, presort:bool=False, followlinks:bool=False)->FilePathList:
     "Return list of files in `path` that have a suffix in `extensions`; optionally `recurse`."
     if recurse:
         res = []
-        for i,(p,d,f) in enumerate(os.walk(path)):
+        for i,(p,d,f) in enumerate(os.walk(path, followlinks=followlinks)):
             # skip hidden dirs
-            if include is not None and i==0:  d[:] = [o for o in d if o in include]
-            else:                             d[:] = [o for o in d if not o.startswith('.')]
+            if include is not None and i==0:   d[:] = [o for o in d if o in include]
+            elif exclude is not None and i==0: d[:] = [o for o in d if o not in exclude]
+            else:                              d[:] = [o for o in d if not o.startswith('.')]
             res += _get_files(path, p, f, extensions)
         if presort: res = sorted(res, key=lambda p: _path_to_same_str(p), reverse=False)
         return res
@@ -96,6 +97,7 @@ class ItemList():
 
     def reconstruct(self, t:Tensor, x:Tensor=None):
         "Reconstruct one of the underlying item for its data `t`."
+        if not hasattr(self[0], 'reconstruct'): return t
         return self[0].reconstruct(t,x) if has_arg(self[0].reconstruct, 'x') else self[0].reconstruct(t)
 
     def new(self, items:Iterator, processor:PreProcessors=None, **kwargs)->'ItemList':
@@ -119,12 +121,13 @@ class ItemList():
         else: return self.new(self.items[idxs], inner_df=index_row(self.inner_df, idxs))
 
     @classmethod
-    def from_folder(cls, path:PathOrStr, extensions:Collection[str]=None, recurse:bool=True,
+    def from_folder(cls, path:PathOrStr, extensions:Collection[str]=None, recurse:bool=True, exclude:Optional[Collection[str]]=None,
                     include:Optional[Collection[str]]=None, processor:PreProcessors=None, presort:Optional[bool]=False, **kwargs)->'ItemList':
         """Create an `ItemList` in `path` from the filenames that have a suffix in `extensions`.
         `recurse` determines if we search subfolders."""
         path = Path(path)
-        return cls(get_files(path, extensions, recurse=recurse, include=include, presort=presort), path=path, processor=processor, **kwargs)
+        return cls(get_files(path, extensions, recurse=recurse, exclude=exclude, include=include, presort=presort), 
+                   path=path, processor=processor, **kwargs)
 
     @classmethod
     def from_df(cls, df:DataFrame, path:PathOrStr='.', cols:IntsOrStrs=0, processor:PreProcessors=None, **kwargs)->'ItemList':
@@ -692,7 +695,7 @@ class LabelList(Dataset):
         if state.get('normalize', False): res.normalize = state['normalize']
         return res
 
-    def process(self, xp:PreProcessor=None, yp:PreProcessor=None, name:str=None):
+    def process(self, xp:PreProcessor=None, yp:PreProcessor=None, name:str=None, max_warn_items:int=5):
         "Launch the processing on `self.x` and `self.y` with `xp` and `yp`."
         self.y.process(yp)
         if getattr(self.y, 'filter_missing_y', False):
@@ -704,8 +707,8 @@ class LabelList(Dataset):
                 for p in self.y.processor:
                     if len(getattr(p, 'warns', [])) > 0:
                         warnings = list(set(p.warns))
-                        self.warn += ', '.join(warnings[:5])
-                        if len(warnings) > 5: self.warn += "..."
+                        self.warn += ', '.join(warnings[:max_warn_items])
+                        if len(warnings) > max_warn_items: self.warn += "..."
                     p.warns = []
                 self.x,self.y = self.x[~filt],self.y[~filt]
         self.x.process(xp)

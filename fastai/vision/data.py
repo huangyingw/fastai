@@ -76,7 +76,7 @@ def normalize_funcs(mean:FloatTensor, std:FloatTensor, do_x:bool=True, do_y:bool
 
 cifar_stats = ([0.491, 0.482, 0.447], [0.247, 0.243, 0.261])
 imagenet_stats = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-mnist_stats = ([0.15]*3, [0.15]*3)
+mnist_stats = ([0.131], [0.308])
 
 def channel_view(x:Tensor)->Tensor:
     "Make channel the first axis of `x` and flatten remaining axes"
@@ -100,15 +100,15 @@ class ImageDataBunch(DataBunch):
                              device=device, no_check=no_check)
 
     @classmethod
-    def from_folder(cls, path:PathOrStr, train:PathOrStr='train', valid:PathOrStr='valid',
+    def from_folder(cls, path:PathOrStr, train:PathOrStr='train', valid:PathOrStr='valid', test:Optional[PathOrStr]=None,
                     valid_pct=None, seed:int=None, classes:Collection=None, **kwargs:Any)->'ImageDataBunch':
         "Create from imagenet style dataset in `path` with `train`,`valid`,`test` subfolders (or provide `valid_pct`)."
         path=Path(path)
-        il = ImageList.from_folder(path)
+        il = ImageList.from_folder(path, exclude=test)
         if valid_pct is None: src = il.split_by_folder(train=train, valid=valid)
         else: src = il.split_by_rand_pct(valid_pct, seed)
         src = src.label_from_folder(classes=classes)
-        return cls.create_from_ll(src, **kwargs)
+        return cls.create_from_ll(src, test=test, **kwargs)
 
     @classmethod
     def from_df(cls, path:PathOrStr, df:pd.DataFrame, folder:PathOrStr=None, label_delim:str=None, valid_pct:float=0.2,
@@ -259,7 +259,7 @@ class ImageList(ItemList):
     def __init__(self, *args, convert_mode='RGB', after_open:Callable=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.convert_mode,self.after_open = convert_mode,after_open
-        self.copy_new.append('convert_mode')
+        self.copy_new += ['convert_mode', 'after_open']
         self.c,self.sizes = 3,{}
 
     def open(self, fn):
@@ -289,10 +289,10 @@ class ImageList(ItemList):
         return res
 
     @classmethod
-    def from_csv(cls, path:PathOrStr, csv_name:str, header:str='infer', **kwargs)->'ItemList':
+    def from_csv(cls, path:PathOrStr, csv_name:str, header:str='infer', delimiter:str=None, **kwargs)->'ItemList':
         "Get the filenames in `path/csv_name` opened with `header`."
         path = Path(path)
-        df = pd.read_csv(path/csv_name, header=header)
+        df = pd.read_csv(path/csv_name, header=header, delimiter=delimiter)
         return cls.from_df(df, path=path, **kwargs)
 
     def reconstruct(self, t:Tensor): return Image(t.float().clamp(min=0,max=1))
@@ -380,7 +380,7 @@ class SegmentationLabelList(ImageList):
         self.copy_new.append('classes')
         self.classes,self.loss_func = classes,CrossEntropyFlat(axis=1)
 
-    def open(self, fn): return open_mask(fn)
+    def open(self, fn): return open_mask(fn, after_open=self.after_open)
     def analyze_pred(self, pred, thresh:float=0.5): return pred.argmax(dim=0)[None]
     def reconstruct(self, t:Tensor): return ImageSegment(t)
 

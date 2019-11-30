@@ -82,7 +82,7 @@ def recurse(func:Callable, x:Any, *args, **kwargs)->Any:
 def first_el(x: Any)->Any:
     "Recursively get the first element of `x`."
     if is_listy(x): return first_el(x[0])
-    if is_dict(x):  return first_el(x[list(d.keys())[0]])
+    if is_dict(x):  return first_el(x[list(x.keys())[0]])
     return x
 
 def to_int(b:Any)->Union[int,List[int]]:
@@ -303,6 +303,11 @@ class EmptyLabel(ItemBase):
     def __init__(self): self.obj,self.data = 0,0
     def __str__(self):  return ''
     def __hash__(self): return hash(str(self))
+    def apply_tfms(self, *args, **kwargs):
+        raise Exception("""Attempting to apply transforms to an empty label. This usually means you are
+        trying to apply transforms on your xs and ys on an inference problem, which will give you wrong
+        predictions. Pass `tfms=None, tfm_y=False` when creating your test set.
+        """)
 
 class Category(ItemBase):
     "Basic class for single classification labels."

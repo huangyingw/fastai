@@ -32,6 +32,7 @@ sidebar_d = {
                 'GeneralScheduler': '/callbacks.general_sched',
                 'CSV Logger': '/callbacks.csv_logger',
                 'Tracking': '/callbacks.tracker',
+                'Tensorboard': '/callbacks.tensorboard',
                 'Memory Profiling': '/callbacks.mem',
                 'Miscellaneous': '/callbacks.misc',
             }
@@ -50,7 +51,6 @@ sidebar_d = {
                 'vision.gan': '/vision.gan',
                 'vision.model overview': '/vision.models',
                 'vision.models.unet': '/vision.models.unet',
-                'widgets.image_cleaner': '/widgets.image_cleaner'
             }
         },
         'empty1': {
@@ -68,7 +68,14 @@ sidebar_d = {
                 'Overview': '/tabular',
                 'tabular.transform': '/tabular.transform',
                 'tabular.data': '/tabular.data',
-                'tabular.models': '/tabular.models'
+                'tabular.models': '/tabular.models',
+                'tabular.learner': '/tabular.learner'
+            },
+        },
+        'empty3': {
+            'widgets': {
+                'widgets.class_confusion': '/widgets.class_confusion',
+                'widgets.image_cleaner': '/widgets.image_cleaner'
             },
         },
         'collab': '/collab',

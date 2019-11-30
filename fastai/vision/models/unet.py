@@ -42,7 +42,7 @@ class DynamicUnet(SequentialEx):
         imsize = img_size
         sfs_szs = model_sizes(encoder, size=imsize)
         sfs_idxs = list(reversed(_get_sfs_idxs(sfs_szs)))
-        self.sfs = hook_outputs([encoder[i] for i in sfs_idxs])
+        self.sfs = hook_outputs([encoder[i] for i in sfs_idxs], detach=False)
         x = dummy_eval(encoder, imsize).detach()
 
         ni = sfs_szs[-1][1]
@@ -56,7 +56,7 @@ class DynamicUnet(SequentialEx):
             up_in_c, x_in_c = int(x.shape[1]), int(sfs_szs[idx][1])
             do_blur = blur and (not_final or blur_final)
             sa = self_attention and (i==len(sfs_idxs)-3)
-            unet_block = UnetBlock(up_in_c, x_in_c, self.sfs[i], final_div=not_final, blur=blur, self_attention=sa,
+            unet_block = UnetBlock(up_in_c, x_in_c, self.sfs[i], final_div=not_final, blur=do_blur, self_attention=sa,
                                    **kwargs).eval()
             layers.append(unet_block)
             x = unet_block(x)
