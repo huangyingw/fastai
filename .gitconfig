@@ -62,6 +62,7 @@
     remote = github
     merge = refs/heads/dev
 [gdif]
+    ignore = ./*.ipynb.py
     ignore = .gitmodules
     ignore = convert.sh
     ignore = copy.sh
