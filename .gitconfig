@@ -56,7 +56,7 @@
     silent = false
     async = false
 [deploy]
-    host = server
+    host = localhost
     path = ~/myproject/git/AI/fastai/fastai
 [branch "dev"]
     remote = github
