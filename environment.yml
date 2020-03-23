@@ -97,6 +97,7 @@ dependencies:
 - prompt_toolkit
 #- pytest
 - cython
+- graphviz
 - pip:
   - torchvision==0.1.9
   - opencv-python

@@ -155,10 +155,10 @@ class ConfusionMatrix(Callback):
         targs = last_target.cpu()
         if self.n_classes == 0:
             self.n_classes = last_output.shape[-1]
-            self.x = torch.arange(0, self.n_classes)
-        cm = ((preds==self.x[:, None]) & (targs==self.x[:, None, None])).sum(dim=2, dtype=torch.float32)
-        if self.cm is None: self.cm =  cm
-        else:               self.cm += cm
+        if self.cm is None: self.cm = torch.zeros((n_classes, n_classes), device=torch.device('cpu'))
+        cm_temp_numpy = self.cm.numpy()
+        np.add.at(cm_temp_numpy, (targs ,preds), 1)
+        self.cm = torch.from_numpy(cm_temp_numpy)
 
     def on_epoch_end(self, **kwargs):
         self.metric = self.cm
@@ -320,7 +320,7 @@ class MultiLabelFbeta(Callback):
     # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html
     _order = -20 
     def __init__(self, beta=2, eps=1e-15, thresh=0.3, sigmoid=True, average="micro"):
-        self.eps,self.thresh,self.sigmoid,self.average,self.beta2 = eps,thresh,sigmoid,average,beta**2
+        self.eps,self.thresh,self.sigmoid,self.average,self.beta = eps,thresh,sigmoid,average,beta
 
     def on_epoch_begin(self, **kwargs):
         self.tp,self.total_pred,self.total_targ = 0,0,0
@@ -333,7 +333,8 @@ class MultiLabelFbeta(Callback):
         self.total_targ += targ.sum(0).float()
     
     def fbeta_score(self, precision, recall):
-        return (1 + self.beta2)*(precision*recall)/((self.beta2*precision + recall) + self.eps)
+        beta2 = self.beta**2
+        return (1 + beta2)*(precision*recall)/((beta2*precision + recall) + self.eps)
 
     def on_epoch_end(self, last_metrics, **kwargs):
         self.total_pred += self.eps

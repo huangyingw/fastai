@@ -63,7 +63,7 @@ class TextClassificationInterpretation(ClassificationInterpretation):
         cl[0][class_id].backward()
         attn = emb.grad.squeeze().abs().sum(dim=-1)
         attn /= attn.max()
-        tokens = self.data.single_ds.reconstruct(ids[0])
+        tokens = self.data.single_ds.reconstruct(ids[0].cpu())
         return tokens, attn
 
     def html_intrinsic_attention(self, text:str, class_id:int=None, **kwargs)->str:
@@ -95,5 +95,5 @@ class TextClassificationInterpretation(ClassificationInterpretation):
         items = np.array(items)
         names = ['Text', 'Prediction', 'Actual', 'Loss', 'Probability']
         df = pd.DataFrame({n:items[:,i] for i,n in enumerate(names)}, columns=names)
-        with pd.option_context('display.max_colwidth', -1):
+        with pd.option_context('display.max_colwidth', pd_max_colwidth()):
             display(HTML(df.to_html(index=False)))

@@ -26,9 +26,8 @@ from matplotlib.patches import Patch
 from pandas import Series, DataFrame
 from io import BufferedWriter, BytesIO
 
-#Mysteriously fails now
-#import pkg_resources
-#pkg_resources.require("fastprogress>=0.1.19")
+import pkg_resources
+pkg_resources.require("fastprogress>=0.2.1")
 from fastprogress.fastprogress import master_bar, progress_bar
 
 #for type annotations
@@ -36,6 +35,9 @@ from numbers import Number
 from typing import Any, AnyStr, Callable, Collection, Dict, Hashable, Iterator, List, Mapping, NewType, Optional
 from typing import Sequence, Tuple, TypeVar, Union
 from types import SimpleNamespace
+
+def pd_max_colwidth(): return None if pd.__version__ >= "1.0.0" else -1
+
 
 def try_import(module):
     "Try to import `module`. Returns module's object on success, None on failure"
