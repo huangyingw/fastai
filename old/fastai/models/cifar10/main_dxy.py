@@ -73,15 +73,19 @@ def main():
   if args.dataset == 'cifar10':
     train_data = dset.CIFAR10(args.data_path, train=True, transform=train_transform, download=True)
     test_data = dset.CIFAR10(args.data_path, train=False, transform=test_transform, download=True)
+    num_classes = 10
   elif args.dataset == 'cifar100':
     train_data = dset.CIFAR100(args.data_path, train=True, transform=train_transform, download=True)
     test_data = dset.CIFAR100(args.data_path, train=False, transform=test_transform, download=True)
+    num_classes = 100
   elif args.dataset == 'svhn':
     train_data = dset.SVHN(args.data_path, split='train', transform=train_transform, download=True)
     test_data = dset.SVHN(args.data_path, split='test', transform=test_transform, download=True)
+    num_classes = 10
   elif args.dataset == 'stl10':
     train_data = dset.STL10(args.data_path, split='train', transform=train_transform, download=True)
     test_data = dset.STL10(args.data_path, split='test', transform=test_transform, download=True)
+    num_classes = 10
   elif args.dataset == 'imagenet':
     assert False, 'Do not finish imagenet code'
   else:
