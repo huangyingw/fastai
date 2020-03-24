@@ -11,6 +11,7 @@ from .metrics import *
 from .swa import *
 from .fp16 import *
 from .lsuv_initializer import apply_lsuv_init
+import time
 
 
 class Learner():
@@ -98,12 +99,10 @@ class Learner():
 
     def save(self, name):
         save_model(self.model, self.get_model_path(name))
-        save_model(self.sched, self.get_model_path(name + '.sched'))
         if hasattr(self, 'swa_model'): save_model(self.swa_model, self.get_model_path(name)[:-3] + '-swa.h5')
 
     def load(self, name):
         load_model(self.model, self.get_model_path(name))
-        load_model(self.sched, self.get_model_path(name + '.sched'))
         if hasattr(self, 'swa_model'): load_model(self.swa_model, self.get_model_path(name)[:-3] + '-swa.h5')
 
     def set_data(self, data): self.data_ = data
@@ -245,16 +244,10 @@ class Learner():
             callbacks += [SWA(model, self.swa_model, swa_start)]
 
         n_epoch = int(sum_geom(cycle_len if cycle_len else 1, cycle_mult, n_cycle))
-        saved_model_name = kwargs.pop('saved_model_name') if 'saved_model_name' in kwargs else None
-        if saved_model_name and os.path.isfile(self.get_model_path(saved_model_name)):
-            self.load(saved_model_name)
-            return
-        fit(model, data, n_epoch, layer_opt.opt, self.crit,
+        return fit(model, data, n_epoch, layer_opt.opt, self.crit,
             metrics=metrics, callbacks=callbacks, reg_fn=self.reg_fn, clip=self.clip, fp16=self.fp16,
             swa_model=self.swa_model if use_swa else None, swa_start=swa_start,
             swa_eval_freq=swa_eval_freq, **kwargs)
-        if saved_model_name:
-            self.save(saved_model_name)
 
     def get_layer_groups(self): return self.models.get_layer_groups()
 
