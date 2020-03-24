@@ -179,7 +179,7 @@ TfmList = Union[Callable, Collection[Callable]]
 class ItemBase():
     "Base item type in the fastai library."
     def __init__(self, data:Any): self.data=self.obj=data
-    def __repr__(self)->str: return f'{self.__class__.__name__} {str(self)}'
+    def __repr__(self)->str: return f'{self.__class__.__name__} {str(self.data)}'
     def show(self, ax:plt.Axes, **kwargs):
         "Subclass this method if you want to customize the way this `ItemBase` is shown on `ax`."
         ax.set_title(str(self))
@@ -192,7 +192,7 @@ class ItemBase():
 def recurse_eq(arr1, arr2):
     if is_listy(arr1): return is_listy(arr2) and len(arr1) == len(arr2) and np.all([recurse_eq(x,y) for x,y in zip(arr1,arr2)])
     else:              return np.all(np.atleast_1d(arr1 == arr2))
-        
+
 def download_url(url:str, dest:str, overwrite:bool=False, pbar:ProgressBar=None,
                  show_progress=True, chunk_size=1024*1024, timeout=4, retries=5)->None:
     "Download `url` to `dest` unless it exists and not `overwrite`."
@@ -208,8 +208,9 @@ def download_url(url:str, dest:str, overwrite:bool=False, pbar:ProgressBar=None,
 
     with open(dest, 'wb') as f:
         nbytes = 0
-        if show_progress: pbar = progress_bar(range(file_size), auto_update=False, leave=False, parent=pbar)
+        if show_progress: pbar = progress_bar(range(file_size), leave=False, parent=pbar)
         try:
+            if show_progress: pbar.update(0)
             for chunk in u.iter_content(chunk_size=chunk_size):
                 nbytes += len(chunk)
                 if show_progress: pbar.update(nbytes)
