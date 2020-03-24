@@ -46,7 +46,7 @@ img[:4, :4]
 arch = resnet34
 data = ImageClassifierData.from_paths(PATH, tfms=tfms_from_model(arch, sz))
 learn = ConvLearner.pretrained(arch, data, precompute=True)
-learn.fit(0.01, 2, saved_model_name='lesson1_1')
+learn.fit(0.01, 2)
 # How good is this model? Well, as we mentioned, prior to this competition, the state of the art was 80% accuracy. But the competition resulted in a huge jump to 98.9% accuracy, with the author of a popular deep learning library winning the competition. Extraordinarily, less than 4 years later, we can now beat that result in seconds! Even last year in this same course, our initial model had 98.3% accuracy, which is nearly double the error we're getting just a year later, and that took around 10 minutes to compute.
 # ## Analyzing results: looking at pictures
 # As well as looking at the overall metrics, it's also a good idea to look at examples of each of:
@@ -150,10 +150,10 @@ plots(ims, rows=2)
 # Let's create a new `data` object that includes this augmentation in the transforms.
 data = ImageClassifierData.from_paths(PATH, tfms=tfms)
 learn = ConvLearner.pretrained(arch, data, precompute=True)
-learn.fit(1e-2, 1, saved_model_name='lesson1_1e-2')
+learn.fit(1e-2, 1)
 learn.precompute = False
 # By default when we create a learner, it sets all but the last layer to *frozen*. That means that it's still only updating the weights in the last layer when we call `fit`.
-learn.fit(1e-2, 3, cycle_len=1, saved_model_name='lesson1_1e-2-3')
+learn.fit(1e-2, 3, cycle_len=1)
 # What is that `cycle_len` parameter? What we've done here is used a technique called *stochastic gradient descent with restarts (SGDR)*, a variant of *learning rate annealing*, which gradually decreases the learning rate as training progresses. This is helpful because as we get closer to the optimal weights, we want to take smaller steps.
 #
 # However, we may find ourselves in a part of the weight space that isn't very resilient - that is, small changes to the weights may result in big changes to the loss. We want to encourage our model to find parts of the weight space that are both accurate and stable. Therefore, from time to time we increase the learning rate (this is the 'restarts' in 'SGDR'), which will force the model to jump to a different part of the weight space if the current area is "spikey". Here's a picture of how that might look if we reset the learning rates 3 times (in this paper they call it a "cyclic LR schedule"):
@@ -174,7 +174,7 @@ learn.unfreeze()
 #
 # Generally speaking, the earlier layers (as we've seen) have more general-purpose features. Therefore we would expect them to need less fine-tuning for new datasets. For this reason we will use different learning rates for different layers: the first few layers will be at 1e-4, the middle layers at 1e-3, and our FC layers we'll leave at 1e-2 as before. We refer to this as *differential learning rates*, although there's no standard name for this techique in the literature that we're aware of.
 lr = np.array([1e-4, 1e-3, 1e-2])
-learn.fit(lr, 3, cycle_len=1, cycle_mult=2, saved_model_name='224_all')
+learn.fit(lr, 3, cycle_len=1, cycle_mult=2)
 # Another trick we've used here is adding the `cycle_mult` parameter. Take a look at the following chart, and see if you can figure out what the parameter is doing:
 learn.sched.plot_lr()
 # Note that's what being plotted above is the learning rate of the *final layers*. The learning rates of the earlier layers are fixed at the same multiples of the final layer rates as we initially requested (i.e. the first layers have 100x smaller, and middle layers 10x smaller learning rates, since we set `lr=np.array([1e-4,1e-3,1e-2])`.
@@ -225,7 +225,7 @@ learn = ConvLearner.pretrained(resnet34, data, precompute=True)
 # During iterative training of a neural network, a *batch* or *mini-batch* is a subset of training samples used in one iteration of Stochastic Gradient Descent (SGD). An *epoch* is a single pass through the entire training set which consists of multiple iterations of SGD.
 #
 # We can now *fit* the model; that is, use *gradient descent* to find the best parameters for the fully connected layer we added, that can separate cat pictures from dog pictures. We need to pass two hyperparameters: the *learning rate* (generally 1e-2 or 1e-3 is a good starting point, we'll look more at this next) and the *number of epochs* (you can pass in a higher number and just stop training when you see it's no longer improving, then re-run it with the number of epochs you found works well.)
-learn.fit(1e-2, 1, saved_model_name='learn4')
+learn.fit(1e-2, 1)
 # ## Analyzing results: loss and accuracy
 # When we run `learn.fit` we print 3 performance values (see above.) Here 0.03 is the value of the **loss** in the training set, 0.0226 is the value of the loss in the validation set and 0.9927 is the validation accuracy. What is the loss? What is accuracy? Why not to just show accuracy?
 #
