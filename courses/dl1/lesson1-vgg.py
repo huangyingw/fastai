@@ -37,7 +37,7 @@ data = ImageClassifierData.from_paths(PATH, bs=bs, tfms=tfms_from_model(arch, sz
 learn = ConvLearner.pretrained(arch, data, precompute=True)
 
 
-learn.fit(0.01, 3, cycle_len=1, saved_model_name='lesson1-vgg_1')
+learn.fit(0.01, 3, cycle_len=1)
 
 
 tfms = tfms_from_model(arch, sz, aug_tfms=transforms_side_on, max_zoom=1.1)
@@ -47,13 +47,13 @@ data = ImageClassifierData.from_paths(PATH, tfms=tfms, bs=bs, num_workers=4)
 learn = ConvLearner.pretrained(arch, data, precompute=True)
 
 
-learn.fit(1e-2, 2, saved_model_name='lesson1-vgg_2')
+learn.fit(1e-2, 2)
 
 
 learn.precompute = False
 
 
-learn.fit(1e-2, 1, cycle_len=1, saved_model_name='lesson1-vgg_3')
+learn.fit(1e-2, 1, cycle_len=1)
 
 
 learn.unfreeze()
@@ -62,14 +62,13 @@ learn.unfreeze()
 lr = np.array([1e-4, 1e-3, 1e-2])
 
 
-learn.fit(lr, 1, cycle_len=1, saved_model_name='lesson1-vgg_4')
+learn.fit(lr, 1, cycle_len=1)
 
 
-learn.fit(lr, 3, cycle_len=1, cycle_mult=2, saved_model_name='lesson1-vgg_5')
+learn.fit(lr, 3, cycle_len=1, cycle_mult=2)
 
 
-learn.fit(lr, 3, cycle_len=3, saved_model_name='lesson1-vgg_6')
+learn.fit(lr, 3, cycle_len=3)
 
 
 log_preds, y = learn.TTA()
-probs = np.mean(np.exp(log_preds), 0)accuracy_np(probs, y)
