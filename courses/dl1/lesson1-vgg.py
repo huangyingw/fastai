@@ -72,3 +72,4 @@ learn.fit(lr, 3, cycle_len=3)
 
 
 log_preds, y = learn.TTA()
+probs = np.mean(np.exp(log_preds), 0)accuracy_np(probs, y)
