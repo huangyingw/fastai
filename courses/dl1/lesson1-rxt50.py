@@ -31,18 +31,18 @@ data = ImageClassifierData.from_paths(PATH, tfms=tfms, bs=bs, num_workers=4)
 learn = ConvLearner.pretrained(arch, data, precompute=True, ps=0.5)
 
 
-learn.fit(1e-2, 1, saved_model_name='lesson1-rxt50_1')
+learn.fit(1e-2, 1)
 learn.precompute = False
 
 
-learn.fit(1e-2, 2, cycle_len=1, saved_model_name='lesson1-rxt50_2')
+learn.fit(1e-2, 2, cycle_len=1)
 
 
 learn.unfreeze()
 lr = np.array([1e-4, 1e-3, 1e-2])
 
 
-learn.fit(lr, 3, cycle_len=1, saved_model_name='lesson1-rxt50_3')
+learn.fit(lr, 3, cycle_len=1)
 
 
 learn.save('224_all_50')
