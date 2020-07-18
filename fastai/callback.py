@@ -50,9 +50,11 @@ class OptimWrapper():
         # weight decay outside of optimizer step (AdamW)
         if self.true_wd:
             for lr,wd,pg1,pg2 in zip(self._lr,self._wd,self.opt.param_groups[::2],self.opt.param_groups[1::2]):
-                for p in pg1['params']: p.data.mul_(1 - wd*lr)
+                for p in pg1['params']: 
+                    if p.grad is not None: p.data.mul_(1 - wd*lr)
                 if self.bn_wd:
-                    for p in pg2['params']: p.data.mul_(1 - wd*lr)
+                    for p in pg2['params']: 
+                        if p.grad is not None: p.data.mul_(1 - wd*lr)
             self.set_val('weight_decay', listify(0, self._wd))
         self.opt.step()
 
@@ -81,7 +83,7 @@ class OptimWrapper():
         self._lr = self.set_val('lr', listify(val, self._lr))
 
     @property
-    def mom(self)->float:return self._mom[-1]
+    def mom(self)->float:return self._mom[-1] if self._mom is not None else None
     @mom.setter
     def mom(self, val:float)->None:
         if 'momentum' in self.opt_keys: self.set_val('momentum', listify(val, self._mom))

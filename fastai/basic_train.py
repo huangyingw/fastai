@@ -537,7 +537,7 @@ class Recorder(LearnerCallback):
         ys = spl(xs)
         return ys
 
-    def plot(self, skip_start:int=10, skip_end:int=5, suggestion:bool=False, return_fig:bool=None,
+    def plot(self, skip_start:int=10, skip_end:int=5, suggestion:bool=False, return_fig:bool=None, show_grid:bool=False,
              **kwargs)->Optional[plt.Figure]:
         "Plot learning rate and losses, trimmed between `skip_start` and `skip_end`. Optionally plot and return min gradient"
         lrs = self._split_list(self.lrs, skip_start, skip_end)
@@ -549,6 +549,7 @@ class Recorder(LearnerCallback):
         ax.set_ylabel("Loss")
         ax.set_xlabel("Learning Rate")
         ax.set_xscale('log')
+        if show_grid: plt.grid(True,which="both",ls="-")
         ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0e'))
         if suggestion:
             try: mg = (np.gradient(np.array(losses))).argmin()
@@ -563,7 +564,7 @@ class Recorder(LearnerCallback):
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
 
-    def plot_losses(self, skip_start:int=0, skip_end:int=0, return_fig:bool=None)->Optional[plt.Figure]:
+    def plot_losses(self, skip_start:int=0, skip_end:int=0, return_fig:bool=None, show_grid:bool=False)->Optional[plt.Figure]:
         "Plot training and validation losses."
         fig, ax = plt.subplots(1,1)
         losses = self._split_list(self.losses, skip_start, skip_end)
@@ -572,13 +573,14 @@ class Recorder(LearnerCallback):
         val_iter = self._split_list_val(np.cumsum(self.nb_batches), skip_start, skip_end)
         val_losses = self._split_list_val(self.val_losses, skip_start, skip_end)
         ax.plot(val_iter, val_losses, label='Validation')
+        plt.grid(show_grid)
         ax.set_ylabel('Loss')
         ax.set_xlabel('Batches processed')
         ax.legend()
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
 
-    def plot_metrics(self, skip_start:int=0, skip_end:int=0, return_fig:bool=None)->Optional[plt.Figure]:
+    def plot_metrics(self, skip_start:int=0, skip_end:int=0, return_fig:bool=None, show_grid:bool=False)->Optional[plt.Figure]:
         "Plot metrics collected during training."
         assert len(self.metrics) != 0, "There are no metrics to plot."
         fig, axes = plt.subplots(len(self.metrics[0]),1,figsize=(6, 4*len(self.metrics[0])))
@@ -588,6 +590,7 @@ class Recorder(LearnerCallback):
             values = [met[i] for met in self.metrics]
             values = self._split_list_val(values, skip_start, skip_end)
             ax.plot(val_iter, values)
+            plt.grid(show_grid)
             ax.set_ylabel(str(self.metrics_names[i]))
             ax.set_xlabel('Batches processed')
         if ifnone(return_fig, defaults.return_fig): return fig
