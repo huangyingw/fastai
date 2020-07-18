@@ -1,15 +1,31 @@
 diff --git a/environment.yml b/environment.yml
-index 15e97752..7f230be2 100644
+index 15e97752..6e1cef3b 100644
 --- ./environment.yml
 +++ ./environment.yml
-@@ -80,6 +80,7 @@ dependencies:
- - six
- - sqlite
- - statsmodels
-+- tabulate
- - testfixtures
- - testpath>=0.4.2
- - tk
+@@ -7,6 +7,7 @@ channels:
+     - pytorch
+     - defaults
+     - peterjc123
++    - conda-forge
+ dependencies:
+     - scipy
+     - cuda90
+@@ -80,6 +81,7 @@ dependencies:
+     - six
+     - sqlite
+     - statsmodels
++    - tabulate
+     - testfixtures
+     - testpath>=0.4.2
+     - tk
+@@ -97,6 +99,7 @@ dependencies:
+       #- pytest
+     - cython
+     - graphviz
++    - neovim
+     - pip:
+         - torchvision==0.1.9
+         - opencv-python
 diff --git a/fdocs.list b/fdocs.list
 new file mode 100644
 index 00000000..e69de29b
