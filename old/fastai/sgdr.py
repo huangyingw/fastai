@@ -2,8 +2,8 @@ from .imports import *
 from .layer_optimizer import *
 from enum import IntEnum
 from timeit import default_timer as timer
+import copy
 import math
-import torch.optim as optim
 
 
 class Callback:
@@ -143,7 +143,7 @@ class LossRecorder(Callback):
             plt.plot(self.iterations, self.lrs)
         if not in_ipynb():
             plt.savefig(os.path.join(self.save_path, 'lr_plot.png'))
-        plt.show()
+
 
 class LR_Updater(LossRecorder):
     '''
@@ -215,7 +215,6 @@ class LR_Finder(LR_Updater):
         plt.xlabel("learning rate (log scale)")
         plt.plot(self.lrs[n_skip:-(n_skip_end + 1)], self.losses[n_skip:-(n_skip_end + 1)])
         plt.xscale('log')
-        plt.show()
 
 class LR_Finder2(LR_Finder):
     """
@@ -616,7 +615,6 @@ class OptimScheduler(LossRecorder):
         else:
             plt.xlabel("learning rate (log scale)")
             plt.xscale('log')
-        plt.show()
 
 def draw_line(ax, x):
     xmin, xmax, ymin, ymax = ax.axis()
