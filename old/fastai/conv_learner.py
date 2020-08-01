@@ -1,10 +1,7 @@
 from .core import *
-from .initializers import *
 from .layers import *
 from .learner import *
-from torch.nn.init import kaiming_normal
-from torchvision.models import resnet101, resnet152, resnet18, resnet34, resnet50
-import torch.nn.functional as F
+from .initializers import *
 
 model_meta = {
     resnet18: [8, 6], resnet34: [8, 6], resnet50: [8, 6], resnet101: [8, 6], resnet152: [8, 6],
