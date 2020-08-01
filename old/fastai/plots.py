@@ -1,5 +1,6 @@
 from .imports import *
 from .torch_imports import *
+from sklearn.metrics import confusion_matrix
 
 def ceildiv(a, b):
     return -(-a // b)
