@@ -124,7 +124,6 @@ class LossRecorder(Callback):
         if not in_ipynb():
             plt.savefig(os.path.join(self.save_path, 'loss_plot.png'))
             np.save(os.path.join(self.save_path, 'losses.npy'), self.losses[10:])
-        plt.show()
 
     def plot_lr(self):
         '''Plots learning rate in jupyter notebook or console, depending on the enviroment of the learner.'''
