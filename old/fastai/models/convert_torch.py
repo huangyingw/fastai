@@ -2,9 +2,14 @@ from __future__ import print_function
 import argparse
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 from torch.autograd import Variable
 from torch.utils.serialization import load_lua
 
+import numpy as np
+import os
+import math
 from functools import reduce
 
 class LambdaBase(nn.Sequential):
