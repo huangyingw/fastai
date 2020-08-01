@@ -1,4 +1,4 @@
-from torch.utils.data import DataLoader, Dataset
+from PIL.ImageFile import ImageFile
 from .dataloader import DataLoader
 from .transforms import *
 
