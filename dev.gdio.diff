@@ -1,5 +1,5 @@
 diff --git a/environment.yml b/environment.yml
-index 15e97752..6e1cef3b 100644
+index 15e97752..3a019126 100644
 --- ./environment.yml
 +++ ./environment.yml
 @@ -7,6 +7,7 @@ channels:
@@ -18,56 +18,18 @@ index 15e97752..6e1cef3b 100644
      - testfixtures
      - testpath>=0.4.2
      - tk
-@@ -97,6 +99,7 @@ dependencies:
+@@ -97,6 +99,8 @@ dependencies:
        #- pytest
      - cython
      - graphviz
 +    - neovim
++    - jupytext
      - pip:
          - torchvision==0.1.9
          - opencv-python
 diff --git a/fdocs.list b/fdocs.list
 new file mode 100644
 index 00000000..e69de29b
-diff --git a/old/fastai/conv_learner.py b/old/fastai/conv_learner.py
-index b8a348d1..506e0397 100644
---- ./old/fastai/conv_learner.py
-+++ ./old/fastai/conv_learner.py
-@@ -1,7 +1,10 @@
- from .core import *
-+from .initializers import *
- from .layers import *
- from .learner import *
--from .initializers import *
-+from torch.nn.init import kaiming_normal
-+from torchvision.models import resnet101, resnet152, resnet18, resnet34, resnet50
-+import torch.nn.functional as F
- 
- model_meta = {
-     resnet18: [8, 6], resnet34: [8, 6], resnet50: [8, 6], resnet101: [8, 6], resnet152: [8, 6],
-diff --git a/old/fastai/core.py b/old/fastai/core.py
-index 3fa367e0..ceb095e3 100644
---- ./old/fastai/core.py
-+++ ./old/fastai/core.py
-@@ -1,5 +1,8 @@
- from .imports import *
- from .torch_imports import *
-+from torch.autograd import Variable
-+import torch.nn as nn
-+import torch.optim as optim
- 
- def sum_geom(a, r, n): return a * n if r == 1 else math.ceil(a * (1 - r**n) / (1 - r))
- 
-diff --git a/old/fastai/dataset.py b/old/fastai/dataset.py
-index 659facb2..39dac71f 100644
---- ./old/fastai/dataset.py
-+++ ./old/fastai/dataset.py
-@@ -1,4 +1,4 @@
--from PIL.ImageFile import ImageFile
-+from torch.utils.data import DataLoader, Dataset
- from .dataloader import DataLoader
- from .transforms import *
- 
 diff --git a/old/fastai/imports.py b/old/fastai/imports.py
 index b0570e05..bb2d7382 100644
 --- ./old/fastai/imports.py
@@ -84,91 +46,3 @@ index b0570e05..bb2d7382 100644
  
  import tqdm as tq
  from tqdm import tqdm_notebook, tnrange
-diff --git a/old/fastai/initializers.py b/old/fastai/initializers.py
-index 021c4d0d..a25fe4ec 100644
---- ./old/fastai/initializers.py
-+++ ./old/fastai/initializers.py
-@@ -1,5 +1,4 @@
--from .imports import *
--from .torch_imports import *
-+import torch.nn as nn
- 
- def cond_init(m, init_fn):
-     if not isinstance(m, (nn.BatchNorm1d,nn.BatchNorm2d,nn.BatchNorm3d)):
-diff --git a/old/fastai/models/convert_torch.py b/old/fastai/models/convert_torch.py
-index f3568545..15e39103 100644
---- ./old/fastai/models/convert_torch.py
-+++ ./old/fastai/models/convert_torch.py
-@@ -2,14 +2,9 @@ from __future__ import print_function
- import argparse
- import torch
- import torch.nn as nn
--import torch.nn.functional as F
--import torch.optim as optim
- from torch.autograd import Variable
- from torch.utils.serialization import load_lua
- 
--import numpy as np
--import os
--import math
- from functools import reduce
- 
- class LambdaBase(nn.Sequential):
-diff --git a/old/fastai/plots.py b/old/fastai/plots.py
-index aae59bc1..f03b234a 100644
---- ./old/fastai/plots.py
-+++ ./old/fastai/plots.py
-@@ -1,6 +1,5 @@
- from .imports import *
- from .torch_imports import *
--from sklearn.metrics import confusion_matrix
- 
- def ceildiv(a, b):
-     return -(-a // b)
-diff --git a/old/fastai/sgdr.py b/old/fastai/sgdr.py
-index 2783a1aa..0a11b797 100644
---- ./old/fastai/sgdr.py
-+++ ./old/fastai/sgdr.py
-@@ -2,8 +2,8 @@ from .imports import *
- from .layer_optimizer import *
- from enum import IntEnum
- from timeit import default_timer as timer
--import copy
- import math
-+import torch.optim as optim
- 
- 
- class Callback:
-@@ -107,6 +124,7 @@ class LossRecorder(Callback):
-         if not in_ipynb():
-             plt.savefig(os.path.join(self.save_path, 'loss_plot.png'))
-             np.save(os.path.join(self.save_path, 'losses.npy'), self.losses[10:])
-+        plt.show()
- 
-     def plot_lr(self):
-         '''Plots learning rate in jupyter notebook or console, depending on the enviroment of the learner.'''
-@@ -125,7 +143,7 @@ class LossRecorder(Callback):
-             plt.plot(self.iterations, self.lrs)
-         if not in_ipynb():
-             plt.savefig(os.path.join(self.save_path, 'lr_plot.png'))
--
-+        plt.show()
- 
- class LR_Updater(LossRecorder):
-     '''
-@@ -195,6 +215,7 @@ class LR_Finder(LR_Updater):
-         plt.xlabel("learning rate (log scale)")
-         plt.plot(self.lrs[n_skip:-(n_skip_end + 1)], self.losses[n_skip:-(n_skip_end + 1)])
-         plt.xscale('log')
-+        plt.show()
- 
- class LR_Finder2(LR_Finder):
-     """
-@@ -590,6 +616,7 @@ class OptimScheduler(LossRecorder):
-         else:
-             plt.xlabel("learning rate (log scale)")
-             plt.xscale('log')
-+        plt.show()
- 
- def draw_line(ax, x):
-     xmin, xmax, ymin, ymax = ax.axis()
