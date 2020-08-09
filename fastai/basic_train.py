@@ -229,7 +229,7 @@ class Learner():
 
     def export(self, file:PathLikeOrBinaryStream='export.pkl', destroy=False):
         "Export the state of the `Learner` in `self.path/file`. `file` can be file-like (file or buffer)"
-        if rank_distrib(): return # don't save if slave proc
+        if rank_distrib(): return # don't save if child proc
         args = ['opt_func', 'loss_func', 'metrics', 'true_wd', 'bn_wd', 'wd', 'train_bn', 'model_dir', 'callback_fns']
         state = {a:getattr(self,a) for a in args}
         state['cb_state'] = {cb.__class__:cb.get_state() for cb in self.callbacks}
@@ -246,12 +246,12 @@ class Learner():
     def save(self, file:PathLikeOrBinaryStream=None, return_path:bool=False, with_opt:bool=True):
         "Save model and optimizer state (if `with_opt`) with `file` to `self.model_dir`. `file` can be file-like (file or buffer)"
         if is_pathlike(file): self._test_writeable_path()
-        if rank_distrib(): return # don't save if slave proc
+        if rank_distrib(): return # don't save if child proc
         target = self.path/self.model_dir/f'{file}.pth' if is_pathlike(file) else file
         if not hasattr(self, 'opt'): with_opt=False
         if not with_opt: state = get_model(self.model).state_dict()
         else: state = {'model': get_model(self.model).state_dict(), 'opt':self.opt.state_dict()}
-        torch.save(state, target)
+        torch_save(state, target)
         if return_path: return target
 
     def dl(self, ds_type:DatasetType=DatasetType.Valid):
@@ -314,7 +314,7 @@ class Learner():
         if hasattr(self, 'opt'): state['opt'] = self.opt.get_state()
 
         tmp_file = get_tmp_file(self.path/self.model_dir)
-        torch.save(state, open(tmp_file, 'wb'))
+        torch_save(state, open(tmp_file, 'wb'))
         for a in attrs_del: delattr(self, a)
         gc.collect()
         state = torch.load(tmp_file)
