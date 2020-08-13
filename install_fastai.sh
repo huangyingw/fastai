@@ -5,3 +5,7 @@ cd "$SCRIPTPATH"
 
 tools/run-after-git-clone
 pip install -e ".[dev]"
+
+conda install -c conda-forge \
+    jupytext \
+    neovim
